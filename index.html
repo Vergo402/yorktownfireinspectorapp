@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#922b21">
+<title>Yorktown Fire Inspection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, writeBatch }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  // ═══════════════════════════════════════════════════════
+  // FIREBASE CONFIG  ← Replace with your own project config
+  // Get this from: Firebase Console → Project Settings → Your apps → Web app
+  // ═══════════════════════════════════════════════════════
+  const firebaseConfig = {
+    apiKey: "AIzaSyAS9xpoaGFR6s44zo8KMi3ZOm5R4SzxH7M",
+    authDomain: "yorktown-fire-inspection.firebaseapp.com",
+    projectId: "yorktown-fire-inspection",
+    storageBucket: "yorktown-fire-inspection.firebasestorage.app",
+    messagingSenderId: "483807412918",
+    appId: "1:483807412918:web:deb6a63ab1d1f82a201c17"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+
+  // ── Expose to global scope for non-module functions ──
+  window._db   = db;
+  window._auth = auth;
+  window._FB   = { collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, writeBatch };
+  // Auth functions (Firebase v10 modular — must be passed here, not callable on auth object)
+  window._signIn     = (email, pw) => signInWithEmailAndPassword(auth, email, pw);
+  window._createUser = (email, pw) => createUserWithEmailAndPassword(auth, email, pw);
+  window._signOut    = ()          => signOut(auth);
+
+  // ── Auth state listener ──
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      window._uid = user.uid;
+      window._userEmail = user.email;
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app-root').classList.remove('hidden');
+      window.appStart();
+    } else {
+      window._uid = null;
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('app-root').classList.add('hidden');
+    }
+  });
+</script>
+
+<style>
+:root {
+  --red:#c0392b; --dark-red:#922b21; --red-light:#fdf0f0;
+  --orange:#e67e22; --orange-light:#fef6ec;
+  --green:#27ae60; --green-light:#eafaf1;
+  --blue:#2471a3; --blue-light:#eaf4fb;
+  --purple:#7d3c98; --purple-light:#f5eef8;
+  --gray:#6c7a7d; --gray-light:#f4f6f7;
+  --border:#e5eaed; --border-dark:#cdd5da;
+  --text:#1a2634; --text-muted:#687a82;
+  --white:#ffffff;
+  --shadow-sm:0 1px 4px rgba(0,0,0,.08);
+  --shadow:0 3px 14px rgba(0,0,0,.11);
+  --radius:14px; --radius-sm:9px;
+  --font:'DM Sans',system-ui,sans-serif;
+  --mono:'DM Mono',monospace;
+  --nav-h:68px; --header-h:58px;
+}
+[data-theme="dark"]{
+  --red:#e05252;--dark-red:#c0392b;--red-light:#2d1515;
+  --orange:#f0a050;--orange-light:#2d1e0f;
+  --green:#4ac87a;--green-light:#0f2d1a;
+  --blue:#5aacdf;--blue-light:#0f1f2d;
+  --gray:#8fa3aa;--gray-light:#1e272b;
+  --border:#2e3d45;--border-dark:#3d5060;
+  --text:#e8eef2;--text-muted:#8fa3aa;
+  --white:#1a2634;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow-x:hidden}
+body{font-family:var(--font);background:var(--gray-light);color:var(--text);font-size:15px;line-height:1.5}
+
+/* ── LOGIN SCREEN ── */
+#login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:24px;
+  background:linear-gradient(160deg,#6b1212 0%,#922b21 50%,#c0392b 100%)}
+.login-card{background:#fff;border-radius:20px;padding:28px 24px;width:100%;max-width:380px;
+  box-shadow:0 12px 48px rgba(0,0,0,.35)}
+.login-logo{text-align:center;margin-bottom:20px}
+.login-logo .seal{font-size:52px;display:block;margin-bottom:8px}
+.login-logo h1{font-size:20px;font-weight:900;color:#922b21}
+.login-logo p{font-size:12px;color:#687a82;font-weight:600;margin-top:2px}
+.login-tabs{display:flex;gap:0;margin-bottom:20px;border:2px solid #e5eaed;border-radius:10px;overflow:hidden}
+.login-tab{flex:1;padding:9px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;
+  background:#f4f6f7;color:#6c7a7d;border:none;font-family:var(--font);transition:all .15s}
+.login-tab.active{background:#c0392b;color:#fff}
+#sync-status{position:fixed;top:64px;right:12px;z-index:800;font-size:11px;font-weight:700;
+  padding:4px 10px;border-radius:20px;background:var(--green-light);color:var(--green);
+  border:1px solid var(--green);opacity:0;transition:opacity .3s;pointer-events:none}
+#sync-status.show{opacity:1}
+#sync-status.saving{background:var(--orange-light);color:var(--orange);border-color:var(--orange)}
+#sync-status.error{background:var(--red-light);color:var(--red);border-color:var(--red)}
+
+/* ── HEADER ── */
+#app-header{
+  background:linear-gradient(130deg,#6b1212 0%,var(--dark-red) 40%,var(--red) 100%);
+  position:sticky;top:0;z-index:900;height:var(--header-h);
+  display:flex;align-items:center;padding:0 14px;gap:10px;
+  box-shadow:0 2px 12px rgba(130,0,0,.35)}
+.hdr-seal{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;
+  border:2px solid rgba(255,255,255,.3)}
+.hdr-text{flex:1}
+.hdr-text h1{font-size:15px;font-weight:800;color:#fff;letter-spacing:-.2px;line-height:1.1}
+.hdr-text p{font-size:10px;color:rgba(255,255,255,.75);font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+.hdr-actions{display:flex;gap:6px;align-items:center}
+.hdr-btn{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.18);
+  border:none;color:#fff;font-size:17px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background .15s}
+.hdr-btn:active{background:rgba(255,255,255,.3)}
+
+/* ── BOTTOM NAV ── */
+#bot-nav{position:fixed;bottom:0;left:0;right:0;z-index:900;background:var(--white);
+  border-top:1.5px solid var(--border);display:flex;height:var(--nav-h);
+  box-shadow:0 -4px 20px rgba(0,0,0,.07);padding-bottom:env(safe-area-inset-bottom,0)}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;background:none;border:none;cursor:pointer;font-size:10px;color:var(--text-muted);
+  font-family:var(--font);font-weight:600;letter-spacing:.3px;padding:8px 4px;
+  transition:color .15s;position:relative}
+.nb .ni{font-size:22px;transition:transform .15s}
+.nb.active{color:var(--red)}
+.nb.active .ni{transform:scale(1.12)}
+.badge-dot{position:absolute;top:8px;right:calc(50% - 14px);width:16px;height:16px;
+  background:var(--red);color:#fff;border-radius:50%;font-size:9px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;border:2px solid var(--white)}
+
+/* ── SCREENS ── */
+.screen{display:none;padding:14px 14px calc(var(--nav-h) + 14px)}
+.screen.active{display:block}
+
+/* ── CARDS ── */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow-sm);margin-bottom:13px;overflow:hidden}
+.card-hdr{padding:12px 15px;font-weight:700;font-size:13px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;letter-spacing:.2px}
+.card-hdr.red{background:linear-gradient(130deg,var(--dark-red),var(--red));color:#fff}
+.card-hdr.blue{background:linear-gradient(130deg,#1a4e6b,var(--blue));color:#fff}
+.card-hdr.green{background:linear-gradient(130deg,#1a6b3a,var(--green));color:#fff}
+.card-hdr.orange{background:linear-gradient(130deg,#8a4010,var(--orange));color:#fff}
+.card-hdr.gray{background:linear-gradient(130deg,#3d5060,#6c7a7d);color:#fff}
+.card-body{padding:15px}
+
+/* ── FORMS ── */
+.fg{margin-bottom:13px}
+.fg label{display:block;font-weight:700;font-size:12px;margin-bottom:5px;
+  color:var(--text-muted);letter-spacing:.4px;text-transform:uppercase}
+.fg label .req{color:var(--red);margin-left:2px}
+.fg input,.fg select,.fg textarea{width:100%;padding:11px 13px;
+  border:2px solid var(--border);border-radius:var(--radius-sm);
+  font-size:14px;font-family:var(--font);background:var(--white);color:var(--text);
+  transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none}
+.fg input:focus,.fg select:focus,.fg textarea:focus{
+  outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(192,57,43,.12)}
+.fg textarea{resize:vertical;min-height:72px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:12px 18px;border:none;border-radius:var(--radius-sm);
+  font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);
+  transition:all .15s;letter-spacing:.1px}
+.btn:active{transform:scale(.97)}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:var(--dark-red)}
+.btn-green{background:var(--green);color:#fff}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-orange{background:var(--orange);color:#fff}
+.btn-gray{background:#95a5a6;color:#fff}
+.btn-outline{background:transparent;border:2px solid var(--border);color:var(--text)}
+.btn-outline-red{background:transparent;border:2px solid var(--red);color:var(--red)}
+.btn-full{width:100%}
+.btn-sm{padding:8px 13px;font-size:12px;border-radius:8px}
+.btn-xs{padding:5px 10px;font-size:11px;border-radius:7px}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;
+  font-size:10px;font-weight:700;letter-spacing:.3px}
+.bdr{background:var(--red-light);color:var(--red)}
+.bdo{background:var(--orange-light);color:var(--orange)}
+.bdg{background:var(--green-light);color:var(--green)}
+.bdb{background:var(--blue-light);color:var(--blue)}
+.bdgr{background:var(--gray-light);color:var(--gray);border:1px solid var(--border)}
+.bdy{background:#fef9e7;color:#7d6608}
+.bdp{background:var(--purple-light);color:var(--purple)}
+
+/* ── STATS ── */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:14px}
+.sc{background:var(--white);border-radius:var(--radius);padding:16px 14px;
+  text-align:center;box-shadow:var(--shadow-sm)}
+.sn{font-size:32px;font-weight:800;line-height:1}
+.sl{font-size:11px;color:var(--text-muted);margin-top:3px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.4px}
+
+/* ── BUSINESS LIST ── */
+.bi{padding:13px 14px;border-bottom:1px solid var(--border);cursor:pointer;
+  transition:background .12s;display:flex;align-items:center;gap:12px}
+.bi:last-child{border-bottom:none}
+.bi:active{background:var(--red-light)}
+.bico{width:44px;height:44px;border-radius:11px;background:var(--red-light);
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.binfo{flex:1;min-width:0}
+.bname{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.baddr{font-size:11px;color:var(--text-muted);margin-top:2px}
+.bmeta{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+.bi-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+
+/* ── CHECKLIST ── */
+.sec-wrap{margin-bottom:4px;overflow:hidden}
+.sec-hdr{width:100%;border:none;background:var(--gray-light);border-left:4px solid var(--red);
+  padding:12px 14px;text-align:left;cursor:pointer;font-family:var(--font);font-weight:700;
+  font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:6px;
+  transition:background .15s;color:var(--text)}
+.sec-hdr.sec-pass{border-left-color:var(--green);background:var(--green-light)}
+.sec-hdr.sec-fail{border-left-color:var(--red);background:var(--red-light)}
+.sec-hdr.sec-na{border-left-color:var(--gray);opacity:.6}
+.sec-pfa{display:flex;gap:4px;align-items:center;flex-shrink:0}
+.spf-btn{padding:5px 10px;border-radius:7px;border:2px solid var(--border);
+  background:var(--white);cursor:pointer;font-size:11px;font-weight:700;
+  font-family:var(--font);transition:all .12s;color:var(--text-muted)}
+.spf-btn.sp-pass{border-color:var(--green);color:var(--green)}
+.spf-btn.sp-pass.sel{background:var(--green);color:#fff}
+.spf-btn.sp-fail{border-color:var(--red);color:var(--red)}
+.spf-btn.sp-fail.sel{background:var(--red);color:#fff}
+.spf-btn.sp-na{border-color:var(--gray);color:var(--gray)}
+.spf-btn.sp-na.sel{background:var(--gray);color:#fff}
+.sec-toggle-btn{background:none;border:none;cursor:pointer;font-size:14px;
+  color:var(--text-muted);padding:2px 4px;flex-shrink:0}
+.sec-items{display:none}
+.sec-items.open{display:block}
+.sec-progress{font-size:10px;color:var(--text-muted);font-weight:600;margin-left:4px;flex-shrink:0}
+
+/* ── CHECKLIST ITEMS ── */
+.ci{padding:12px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;gap:10px;background:var(--white)}
+.ci:last-child{border-bottom:none}
+.ci.ci-na{opacity:.45;pointer-events:none}
+.ci.ci-fail{background:var(--red-light)}
+.ci-ctrl{flex-shrink:0;padding-top:1px}
+.rg{display:flex;gap:4px}
+.rb{width:34px;height:34px;border-radius:8px;border:2px solid var(--border);
+  background:var(--white);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:800;transition:all .12s;
+  font-family:var(--font);color:var(--text-muted)}
+.rb:active{transform:scale(.93)}
+.rb.rp{border-color:var(--green);color:var(--green)}.rb.rp.sel{background:var(--green);color:#fff}
+.rb.rf{border-color:var(--red);color:var(--red)}.rb.rf.sel{background:var(--red);color:#fff}
+.rb.rn{border-color:var(--gray);color:var(--gray)}.rb.rn.sel{background:var(--gray);color:#fff}
+.ci-body{flex:1;min-width:0}
+.ci-lbl{font-size:13px;font-weight:500;line-height:1.4;color:var(--text)}
+.ci-code{font-size:10px;color:var(--blue);margin-top:3px;font-weight:700;font-family:var(--mono)}
+.ci-note{width:100%;margin-top:6px;padding:8px 10px;border:1.5px solid var(--border);
+  border-radius:8px;font-size:12px;resize:vertical;display:none;
+  font-family:var(--font);background:var(--white);color:var(--text)}
+.ci-note.show{display:block}
+.ci-note-actions{display:flex;gap:6px;margin-top:5px;align-items:center}
+.note-toggle{font-size:11px;color:var(--text-muted);background:none;border:none;
+  cursor:pointer;padding:0;font-family:var(--font);font-weight:600}
+.photo-toggle{font-size:11px;color:var(--blue);background:none;border:none;
+  cursor:pointer;padding:0;font-family:var(--font);font-weight:600}
+.ci-photos{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.ci-photo-thumb{width:68px;height:68px;object-fit:cover;border-radius:8px;
+  border:2px solid var(--border);cursor:pointer}
+.crit-star{color:var(--red);font-weight:900;margin-right:2px}
+
+/* ── VIOLATIONS ── */
+.vi{padding:13px 14px;border-left:4px solid var(--red);border-bottom:1px solid var(--border);background:var(--white)}
+.vi:last-child{border-bottom:none}
+.vi.vi-std{border-left-color:var(--orange)}
+.vi.vi-resolved{border-left-color:var(--green);opacity:.7}
+.vi-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.vi-title{font-weight:700;font-size:13px;color:var(--text)}
+.vi-detail{font-size:11px;color:var(--text-muted);margin-top:3px}
+.vi-code{font-size:10px;color:var(--blue);font-weight:700;margin-top:2px;font-family:var(--mono)}
+.vi-note{font-size:11px;color:var(--orange);font-weight:600;margin-top:3px}
+.vi-deadline{font-size:11px;font-weight:700;margin-top:4px}
+.vi-deadline.overdue{color:var(--red)}
+.vi-deadline.soon{color:var(--orange)}
+.vi-deadline.ok{color:var(--green)}
+
+/* ── PROGRESS ── */
+.pw{background:var(--border);border-radius:10px;height:8px;overflow:hidden}
+.pb{height:100%;border-radius:10px;background:var(--green);transition:width .4s}
+.pb.pb-warn{background:var(--orange)}
+.pb.pb-danger{background:var(--red)}
+
+/* ── ALERTS ── */
+.al{padding:11px 13px;border-radius:var(--radius-sm);font-size:12px;
+  margin-bottom:11px;display:flex;gap:8px;align-items:flex-start;font-weight:500}
+.al-red{background:var(--red-light);border-left:4px solid var(--red);color:var(--red)}
+.al-orange{background:var(--orange-light);border-left:4px solid var(--orange);color:#7a4010}
+.al-green{background:var(--green-light);border-left:4px solid var(--green);color:#1a6b3a}
+.al-blue{background:var(--blue-light);border-left:4px solid var(--blue);color:#1a4e6b}
+.al-purple{background:var(--purple-light);border-left:4px solid var(--purple);color:#4a1070}
+[data-theme="dark"] .al-orange{color:var(--orange)}
+[data-theme="dark"] .al-green{color:var(--green)}
+[data-theme="dark"] .al-blue{color:var(--blue)}
+
+/* ── SEARCH ── */
+.sw{position:relative;margin-bottom:13px}
+.sw input{padding-left:38px}
+.si{position:absolute;left:12px;top:50%;transform:translateY(-50%);
+  color:var(--text-muted);font-size:16px;pointer-events:none}
+
+/* ── MODALS ── */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;
+  display:none;align-items:flex-end;justify-content:center;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.mo.open{display:flex}
+.md{background:var(--white);border-radius:22px 22px 0 0;width:100%;
+  max-width:600px;max-height:92vh;overflow-y:auto;padding:0 18px 24px;
+  animation:slideUp .28s cubic-bezier(.34,1.4,.64,1)}
+.md-handle{width:40px;height:5px;background:var(--border-dark);border-radius:3px;margin:14px auto 16px}
+.md-title{font-size:18px;font-weight:800;margin-bottom:16px;color:var(--text)}
+@keyframes slideUp{from{transform:translateY(100%);opacity:.6}to{transform:translateY(0);opacity:1}}
+
+/* ── INSP HEADER ── */
+.insp-top-bar{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow-sm);
+  margin-bottom:11px;padding:13px 14px;position:sticky;top:calc(var(--header-h) + 6px);z-index:100}
+.qi-row{display:flex;gap:8px;margin-top:8px}
+.qi{flex:1;text-align:center;background:var(--gray-light);border-radius:8px;padding:6px 4px}
+.qi-n{font-size:18px;font-weight:800;line-height:1}
+.qi-l{font-size:9px;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:1px}
+
+/* ── DEADLINE BTNS ── */
+.deadline-row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.dl-btn{padding:5px 11px;border-radius:20px;border:2px solid var(--border);
+  background:var(--white);font-size:11px;font-weight:700;cursor:pointer;
+  font-family:var(--font);color:var(--text-muted);transition:all .12s}
+.dl-btn.sel{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* ── FILTER CHIPS ── */
+.filter-chips{display:flex;gap:6px;overflow-x:auto;padding:0 0 8px;margin-bottom:4px;
+  scrollbar-width:none}
+.filter-chips::-webkit-scrollbar{display:none}
+.chip{padding:6px 13px;border-radius:20px;border:2px solid var(--border);
+  background:var(--white);font-size:12px;font-weight:700;cursor:pointer;
+  font-family:var(--font);color:var(--text-muted);white-space:nowrap;transition:all .12s;flex-shrink:0}
+.chip.sel{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* ── MISC ── */
+.divider{height:1.5px;background:var(--border);margin:14px 0}
+.hidden{display:none!important}
+.es{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.es .ei{font-size:56px;margin-bottom:13px}
+.es p{font-size:14px;font-weight:500}
+.flex{display:flex}.gap6{gap:6px}.gap8{gap:8px}.ac{align-items:center}
+.jb{justify-content:space-between}.jc{justify-content:center}.fwrap{flex-wrap:wrap}
+.mt8{margin-top:8px}.mt12{margin-top:12px}.mt14{margin-top:14px}
+.loading{text-align:center;padding:32px;color:var(--text-muted);font-weight:600;font-size:14px}
+.spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);
+  border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hist-item{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;gap:11px;cursor:pointer;transition:background .12s}
+.hist-item:last-child{border-bottom:none}
+.hist-item:active{background:var(--gray-light)}
+
+/* ── PRINT ── */
+@media print{
+  #app-header,#bot-nav,.mo,#sync-status,#login-screen,
+  .btn,.nb,.sec-pfa,.sec-toggle-btn,.rg,.ci-ctrl,.note-toggle,.photo-toggle,
+  #insp-ph,.no-print{display:none!important}
+  body{background:#fff!important;color:#000!important;font-size:11pt}
+  .screen{display:block!important;padding:0!important}
+  #screen-print-report{display:block!important}
+  .card{box-shadow:none!important;border:1px solid #ccc!important;margin-bottom:10pt}
+  @page{margin:.75in;size:letter}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN SCREEN ══════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="seal">🔥</span>
+      <h1>Yorktown Fire Inspection</h1>
+      <p>Town of Yorktown Bureau of Fire Prevention</p>
+    </div>
+    <div class="login-tabs">
+      <button class="login-tab active" id="tab-signin" onclick="switchTab('signin')">Sign In</button>
+      <button class="login-tab" id="tab-signup" onclick="switchTab('signup')">Register</button>
+    </div>
+    <div id="login-error" class="al al-red hidden" style="margin-bottom:12px">
+      <span>⚠️</span><span id="login-error-msg"></span>
+    </div>
+    <div class="fg"><label>Email Address</label>
+      <input type="email" id="auth-email" placeholder="inspector@yorktownny.gov" autocomplete="email">
+    </div>
+    <div class="fg"><label>Password</label>
+      <input type="password" id="auth-pw" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div class="fg hidden" id="signup-extra">
+      <label>Confirm Password</label>
+      <input type="password" id="auth-pw2" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <button class="btn btn-red btn-full" onclick="doAuth()" id="auth-btn">Sign In</button>
+    <div style="text-align:center;margin-top:14px;font-size:11px;color:#687a82;font-weight:600">
+      All inspection data is securely stored in the cloud and accessible from any device.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ROOT ══════════════════ -->
+<div id="app-root" class="hidden">
+
+  <!-- SYNC STATUS -->
+  <div id="sync-status">✓ Synced</div>
+
+  <!-- HEADER -->
+  <header id="app-header">
+    <div class="hdr-seal">🔥</div>
+    <div class="hdr-text">
+      <h1>Yorktown Fire Inspection</h1>
+      <p>Bureau of Fire Prevention · NYS Code</p>
+    </div>
+    <div class="hdr-actions">
+      <button class="hdr-btn" onclick="toggleDark()" id="dark-btn" title="Dark mode">🌙</button>
+      <button class="hdr-btn" onclick="showScreen('settings')" title="Settings">⚙️</button>
+      <button class="hdr-btn" onclick="doSignOut()" title="Sign out">🚪</button>
+    </div>
+  </header>
+
+  <!-- SCREENS -->
+  <div id="screen-dashboard" class="screen active">
+    <div class="sg" id="dash-stats"></div>
+    <div id="dash-alerts"></div>
+    <div class="card"><div class="card-hdr red">📋 Recent Inspections</div><div id="dash-recent"></div></div>
+    <div class="card">
+      <div class="card-hdr orange">⚠️ Open Violations <span id="dash-viol-count" class="badge" style="background:rgba(255,255,255,.25);color:#fff">0</span></div>
+      <div id="dash-violations"></div>
+    </div>
+    <div class="al al-blue">
+      <span>📜</span>
+      <div><strong>Code Basis:</strong> NYS 19 NYCRR Part 1225 · Yorktown Ch.130 · 2020 IBC · 2021 IFC · NFPA 1, 10, 13, 25, 72, 80, 101, 855</div>
+    </div>
+  </div>
+
+  <div id="screen-businesses" class="screen">
+    <div class="flex jb ac" style="margin-bottom:13px">
+      <h2 style="font-size:17px;font-weight:800">Properties</h2>
+      <button class="btn btn-red btn-sm" onclick="openAddBiz()">＋ Add</button>
+    </div>
+    <div class="sw"><span class="si">🔍</span><input type="text" id="biz-search" placeholder="Search by name, address…" oninput="renderBizList()"></div>
+    <div class="filter-chips" id="biz-filter-chips">
+      <div class="chip sel" onclick="filterBizOcc(this,'')">All</div>
+      <div class="chip" onclick="filterBizOcc(this,'A')">Group A</div>
+      <div class="chip" onclick="filterBizOcc(this,'B')">Group B</div>
+      <div class="chip" onclick="filterBizOcc(this,'E')">Group E</div>
+      <div class="chip" onclick="filterBizOcc(this,'F')">Group F</div>
+      <div class="chip" onclick="filterBizOcc(this,'H')">Group H</div>
+      <div class="chip" onclick="filterBizOcc(this,'I')">Group I</div>
+      <div class="chip" onclick="filterBizOcc(this,'M')">Group M</div>
+      <div class="chip" onclick="filterBizOcc(this,'R')">Group R</div>
+      <div class="chip" onclick="filterBizOcc(this,'S')">Group S</div>
+    </div>
+    <div class="card"><div id="biz-list"><div class="loading"><span class="spinner"></span>Loading…</div></div></div>
+  </div>
+
+  <div id="screen-inspection" class="screen">
+    <div id="insp-ph" class="es"><div class="ei">📋</div><p>Select a property to begin an inspection</p>
+      <button class="btn btn-red mt12" onclick="showScreen('businesses')">Select Property</button></div>
+    <div id="insp-body" class="hidden">
+      <div class="insp-top-bar">
+        <div class="flex jb ac">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="ib-name">—</div>
+            <div style="font-size:11px;color:var(--text-muted)" id="ib-addr">—</div>
+            <div class="flex gap6 mt8 fwrap" id="ib-badges"></div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:12px">
+            <div style="font-size:11px;color:var(--text-muted);font-weight:700">PROGRESS</div>
+            <div style="font-size:24px;font-weight:800" id="ib-pct">0%</div>
+          </div>
+        </div>
+        <div class="pw mt8"><div class="pb" id="ib-prog" style="width:0%"></div></div>
+        <div class="qi-row">
+          <div class="qi"><div class="qi-n" style="color:var(--green)" id="qi-pass">0</div><div class="qi-l">Pass</div></div>
+          <div class="qi"><div class="qi-n" style="color:var(--red)" id="qi-fail">0</div><div class="qi-l">Fail</div></div>
+          <div class="qi"><div class="qi-n" style="color:var(--gray)" id="qi-na">0</div><div class="qi-l">N/A</div></div>
+          <div class="qi"><div class="qi-n" id="qi-left">—</div><div class="qi-l">Left</div></div>
+        </div>
+      </div>
+      <div id="ib-alerts"></div>
+      <div id="ib-checklist"></div>
+      <div class="flex gap8 fwrap mt12">
+        <button class="btn btn-green" style="flex:1" onclick="completeInsp()">✅ Complete Inspection</button>
+        <button class="btn btn-orange" onclick="saveDraft()">💾 Draft</button>
+        <button class="btn btn-blue btn-sm" onclick="printReport()">🖨️</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-violations" class="screen">
+    <div class="flex jb ac" style="margin-bottom:13px">
+      <h2 style="font-size:17px;font-weight:800">Violation Log</h2>
+      <div class="flex gap6 ac">
+        <span class="badge bdr" id="vc-badge">0</span>
+        <button class="btn btn-sm btn-blue" onclick="openStandaloneEmail()">📧 Email</button>
+      </div>
+    </div>
+    <div class="sw"><span class="si">🔍</span><input type="text" id="viol-search" placeholder="Search violations…" oninput="renderViols()"></div>
+    <div class="filter-chips">
+      <div class="chip sel" id="vf-all" onclick="setViolFilter('all',this)">All Open</div>
+      <div class="chip" id="vf-critical" onclick="setViolFilter('critical',this)">★ Critical</div>
+      <div class="chip" id="vf-resolved" onclick="setViolFilter('resolved',this)">✓ Resolved</div>
+      <div class="chip" id="vf-overdue" onclick="setViolFilter('overdue',this)">⏰ Overdue</div>
+    </div>
+    <div id="viol-list"><div class="loading"><span class="spinner"></span>Loading…</div></div>
+  </div>
+
+  <div id="screen-settings" class="screen">
+    <h2 style="font-size:17px;font-weight:800;margin-bottom:16px">⚙️ Settings</h2>
+    <div class="al al-blue" style="margin-bottom:14px">
+      <span>☁️</span><div>Signed in as <strong id="settings-email"></strong> · Data syncs across all your devices automatically.</div>
+    </div>
+    <div class="card">
+      <div class="card-hdr blue">👤 Inspector Information</div>
+      <div class="card-body">
+        <div class="frow">
+          <div class="fg"><label>First Name</label><input type="text" id="s-fname" placeholder="John"></div>
+          <div class="fg"><label>Last Name</label><input type="text" id="s-lname" placeholder="Smith"></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Badge / License #</label><input type="text" id="s-ibadge" placeholder="FI-0000"></div>
+          <div class="fg"><label>Certification</label>
+            <select id="s-cert">
+              <option value="">—</option>
+              <option>Code Enforcement Officer</option>
+              <option>Fire Inspector I (NFPA 1031)</option>
+              <option>Fire Inspector II (NFPA 1031)</option>
+              <option>Building Inspector</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg"><label>Inspector Email</label><input type="email" id="s-iemail" placeholder="inspector@yorktownny.gov"></div>
+        <div class="fg"><label>Inspector Phone</label><input type="tel" id="s-iphone" placeholder="(914) 555-0000"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr blue">🏛️ Building Department</div>
+      <div class="card-body">
+        <div class="fg"><label>Department Name</label><input type="text" id="s-dname" placeholder="Town of Yorktown Building Dept."></div>
+        <div class="fg"><label>Department Email</label><input type="email" id="s-demail" placeholder="building@yorktownny.gov"></div>
+        <div class="fg"><label>Department Phone</label><input type="tel" id="s-dphone" placeholder="(914) 962-5722"></div>
+        <div class="fg"><label>Mailing Address</label><input type="text" id="s-daddr" placeholder="363 Underhill Ave, Yorktown Heights, NY 10598"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr gray">⚙️ Defaults</div>
+      <div class="card-body">
+        <div class="frow">
+          <div class="fg"><label>Default City</label><input type="text" id="s-dcity" placeholder="Yorktown Heights"></div>
+          <div class="fg"><label>Default ZIP</label><input type="text" id="s-dzip" placeholder="10598"></div>
+        </div>
+        <div class="fg"><label>Default Violation Deadline</label>
+          <select id="s-deadline">
+            <option value="1">24 hours (Critical)</option>
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days (Standard)</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-green btn-full" onclick="saveSettings()">☁️ Save to Cloud</button>
+    <div class="al al-green hidden mt8" id="s-saved">✅ Settings saved to cloud!</div>
+    <div class="divider"></div>
+    <div class="card">
+      <div class="card-hdr gray">📦 Data</div>
+      <div class="card-body">
+        <button class="btn btn-blue btn-full" onclick="exportData()">📤 Export All Data (JSON)</button>
+        <button class="btn btn-gray btn-full mt8" onclick="doSignOut()">🚪 Sign Out</button>
+      </div>
+    </div>
+    <div class="card mt14">
+      <div class="card-hdr green">📚 Code References</div>
+      <div class="card-body" style="font-size:12px;line-height:1.8">
+        <strong>NYS Uniform Fire Prevention &amp; Building Code</strong> – 19 NYCRR Part 1225<br>
+        <strong>Town of Yorktown</strong> – Chapter 130, Bureau of Fire Prevention<br>
+        <strong>2020 IBC / 2021 IFC</strong> – Occupancy Classifications<br>
+        <strong>NFPA 1, 10, 13/25, 72, 80, 101, 855</strong> · <strong>IFC §1207</strong> Li-Ion/ESS
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav id="bot-nav">
+    <button class="nb active" id="nav-dashboard" onclick="showScreen('dashboard')"><span class="ni">🏠</span>Dashboard</button>
+    <button class="nb" id="nav-businesses" onclick="showScreen('businesses')"><span class="ni">🏢</span>Properties</button>
+    <button class="nb" id="nav-inspection" onclick="showScreen('inspection')"><span class="ni">📋</span>Inspect</button>
+    <button class="nb" id="nav-violations" onclick="showScreen('violations')">
+      <span class="ni">⚠️</span>Violations
+      <span class="badge-dot hidden" id="viol-dot">0</span>
+    </button>
+    <button class="nb" id="nav-settings" onclick="showScreen('settings')"><span class="ni">⚙️</span>Settings</button>
+  </nav>
+
+</div><!-- end app-root -->
+
+<!-- ════════════════════ MODALS ════════════════════ -->
+
+<!-- ADD/EDIT BUSINESS -->
+<div class="mo" id="mo-biz">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title" id="biz-mo-title">➕ Add Property</div>
+    <div class="fg"><label>Business / Property Name <span class="req">*</span></label><input type="text" id="b-name" placeholder="e.g. Yorktown Diner"></div>
+    <div class="fg"><label>Street Address <span class="req">*</span></label><input type="text" id="b-addr" placeholder="e.g. 123 Main St"></div>
+    <div class="frow">
+      <div class="fg"><label>City</label><input type="text" id="b-city" value="Yorktown Heights"></div>
+      <div class="fg"><label>ZIP</label><input type="text" id="b-zip" value="10598"></div>
+    </div>
+    <div class="fg">
+      <label>IBC Occupancy Classification <span class="req">*</span></label>
+      <select id="b-occ">
+        <option value="">— Select —</option>
+        <optgroup label="Group A – Assembly">
+          <option value="A-1">A-1: Theaters, Performing Arts</option>
+          <option value="A-2">A-2: Restaurants, Nightclubs, Bars</option>
+          <option value="A-3">A-3: Worship, Recreation, Community</option>
+          <option value="A-4">A-4: Indoor Arenas, Sports Facilities</option>
+          <option value="A-5">A-5: Stadiums, Outdoor Venues</option>
+        </optgroup>
+        <optgroup label="Group B – Business">
+          <option value="B">B: Offices, Banks, Higher Education</option>
+        </optgroup>
+        <optgroup label="Group E – Educational">
+          <option value="E">E: Schools, Daycares (K-12)</option>
+        </optgroup>
+        <optgroup label="Group F – Factory/Industrial">
+          <option value="F-1">F-1: Moderate-Hazard Factory / Auto Repair</option>
+          <option value="F-2">F-2: Low-Hazard Factory</option>
+        </optgroup>
+        <optgroup label="Group H – High Hazard">
+          <option value="H-1">H-1: Detonation Hazard</option>
+          <option value="H-2">H-2: Deflagration Hazard</option>
+          <option value="H-3">H-3: Physical Hazard Materials</option>
+          <option value="H-4">H-4: Health Hazard Materials</option>
+          <option value="H-5">H-5: HPM / Semiconductor</option>
+        </optgroup>
+        <optgroup label="Group I – Institutional">
+          <option value="I-1">I-1: Assisted Living / Board &amp; Care</option>
+          <option value="I-2">I-2: Hospitals / Nursing Facilities</option>
+          <option value="I-3">I-3: Detention / Correctional</option>
+          <option value="I-4">I-4: Day Care (non-E)</option>
+        </optgroup>
+        <optgroup label="Group M – Mercantile">
+          <option value="M">M: Retail, Department Stores</option>
+        </optgroup>
+        <optgroup label="Group R – Residential">
+          <option value="R-1">R-1: Hotels / Motels</option>
+          <option value="R-2">R-2: Apartments / Multi-Family</option>
+          <option value="R-3">R-3: 1 &amp; 2 Family Dwellings</option>
+          <option value="R-4">R-4: Residential Care (≤16)</option>
+        </optgroup>
+        <optgroup label="Group S – Storage">
+          <option value="S-1">S-1: Moderate-Hazard Storage</option>
+          <option value="S-2">S-2: Low-Hazard Storage</option>
+        </optgroup>
+        <optgroup label="Group U – Utility">
+          <option value="U">U: Utility / Miscellaneous</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="fg"><label>Contact / Responsible Party <span class="req">*</span></label><input type="text" id="b-contact" placeholder="e.g. Jane Doe, Owner"></div>
+    <div class="fg"><label>Contact Email <span class="req">*</span></label><input type="email" id="b-cemail" placeholder="owner@business.com"></div>
+    <div class="fg"><label>Contact Phone</label><input type="tel" id="b-cphone" placeholder="(914) 555-0000"></div>
+    <div class="frow">
+      <div class="fg"><label>Stories</label>
+        <select id="b-stories"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4+">4+</option></select>
+      </div>
+      <div class="fg"><label>Approx Sq Ft</label><input type="text" id="b-sqft" placeholder="e.g. 5,000"></div>
+    </div>
+    <div class="fg"><label>Sprinkler System</label>
+      <select id="b-sprink">
+        <option value="yes">Full NFPA 13</option><option value="13r">NFPA 13R</option>
+        <option value="13d">NFPA 13D</option><option value="partial">Partial</option>
+        <option value="no">None</option><option value="unknown">Unknown</option>
+      </select>
+    </div>
+    <div class="fg"><label>Construction Type</label>
+      <select id="b-ctype">
+        <option value="">— Select —</option>
+        <option value="I-A">Type I-A (Fire Resistive)</option><option value="I-B">Type I-B</option>
+        <option value="II-A">Type II-A</option><option value="II-B">Type II-B</option>
+        <option value="III-A">Type III-A (Ordinary)</option><option value="III-B">Type III-B</option>
+        <option value="IV-A">Type IV-A (Heavy Timber)</option>
+        <option value="V-A">Type V-A (Wood Frame)</option><option value="V-B">Type V-B</option>
+      </select>
+    </div>
+    <div class="fg"><label>Li-Ion / ESS Present</label>
+      <select id="b-liion">
+        <option value="none">None</option>
+        <option value="small">Small devices (phones, tools, laptops)</option>
+        <option value="medium">Medium – e-bikes, scooters, fleet EVs</option>
+        <option value="large">Large – ESS / commercial (UL 9540)</option>
+        <option value="mixed">Mixed / Multiple categories</option>
+      </select>
+    </div>
+    <div class="fg"><label>Internal Notes</label>
+      <textarea id="b-notes" placeholder="Access instructions, prior hazards, notes…"></textarea>
+    </div>
+    <div class="flex gap8">
+      <button class="btn btn-green" style="flex:1" onclick="saveBiz()">☁️ Save</button>
+      <button class="btn btn-outline" onclick="closeMo('mo-biz')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLETE INSPECTION -->
+<div class="mo" id="mo-complete">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title">✅ Complete Inspection</div>
+    <div id="mo-comp-sum"></div>
+    <div class="fg mt12"><label>Overall Notes</label>
+      <textarea id="comp-notes" placeholder="General observations, conditions…"></textarea>
+    </div>
+    <div class="fg"><label>Inspector Signature (Full Name) <span class="req">*</span></label>
+      <input type="text" id="comp-sig" placeholder="Type your full name to sign">
+    </div>
+    <div class="fg"><label>Corrective Action Deadline</label>
+      <div class="deadline-row">
+        <div class="dl-btn" onclick="setDeadline(1,this)">24 hrs</div>
+        <div class="dl-btn" onclick="setDeadline(7,this)">7 days</div>
+        <div class="dl-btn sel" onclick="setDeadline(30,this)">30 days</div>
+        <div class="dl-btn" onclick="setDeadline(60,this)">60 days</div>
+        <div class="dl-btn" onclick="setDeadline(90,this)">90 days</div>
+      </div>
+    </div>
+    <div class="flex gap8 mt12">
+      <button class="btn btn-red" style="flex:1" onclick="sendEmailFromModal()">📧 Email Report</button>
+      <button class="btn btn-green" style="flex:1" onclick="finalizeInsp()">✅ Finalize &amp; Save</button>
+    </div>
+    <button class="btn btn-outline btn-full mt8" onclick="closeMo('mo-complete')">← Back to Checklist</button>
+  </div>
+</div>
+
+<!-- EMAIL PREVIEW -->
+<div class="mo" id="mo-email">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title">📧 Violation Report Email</div>
+    <div id="email-preview"></div>
+    <div class="flex gap8 mt12 fwrap">
+      <button class="btn btn-red" style="flex:1" id="btn-open-email">📧 Open in Mail App</button>
+      <button class="btn btn-blue" onclick="copyEmail()">📋 Copy</button>
+    </div>
+    <button class="btn btn-outline btn-full mt8" onclick="closeMo('mo-email')">Close</button>
+  </div>
+</div>
+
+<!-- STANDALONE EMAIL -->
+<div class="mo" id="mo-email-standalone">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title">📧 Email Violation Reports</div>
+    <div class="fg"><label>Filter by Property</label>
+      <select id="email-biz-select" onchange="previewStandaloneEmail()">
+        <option value="">— All Open Violations —</option>
+      </select>
+    </div>
+    <div id="standalone-email-preview"></div>
+    <div class="flex gap8 mt12">
+      <button class="btn btn-red" style="flex:1" id="btn-standalone-open">📧 Open in Mail</button>
+      <button class="btn btn-blue" onclick="copyStandaloneEmail()">📋 Copy</button>
+    </div>
+    <button class="btn btn-outline btn-full mt8" onclick="closeMo('mo-email-standalone')">Close</button>
+  </div>
+</div>
+
+<!-- VIOLATION DETAIL -->
+<div class="mo" id="mo-viol-detail">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title" id="vd-title">Violation Detail</div>
+    <div id="vd-body"></div>
+    <button class="btn btn-outline btn-full mt12" onclick="closeMo('mo-viol-detail')">Close</button>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="mo" id="mo-history">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title" id="hist-mo-title">Inspection History</div>
+    <div id="hist-mo-body"></div>
+    <button class="btn btn-outline btn-full mt12" onclick="closeMo('mo-history')">Close</button>
+  </div>
+</div>
+
+<!-- PAST REPORT -->
+<div class="mo" id="mo-past-report">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title">Inspection Report</div>
+    <div id="past-report-body"></div>
+    <div class="flex gap8 mt12">
+      <button class="btn btn-blue" style="flex:1" onclick="window.print()">🖨️ Print</button>
+      <button class="btn btn-outline" onclick="closeMo('mo-past-report')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- PHOTO VIEWER -->
+<div class="mo" id="mo-photo">
+  <div class="md">
+    <div class="md-handle"></div>
+    <img id="photo-modal-img" src="" alt="Photo" style="max-width:100%;border-radius:10px;display:block;margin:0 auto">
+    <div style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:6px" id="photo-modal-cap"></div>
+    <div class="flex gap8 mt12 jc">
+      <button class="btn btn-gray btn-sm" id="photo-del-btn">🗑️ Delete</button>
+      <button class="btn btn-outline btn-sm" onclick="closeMo('mo-photo')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRINT CONTENT (hidden) -->
+<div id="screen-print-report" style="display:none"><div id="print-report-content"></div></div>
+
+<script src="app.js"></script>
+</body>
+</html>
