@@ -291,6 +291,7 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
     <button class="hdr-user" id="hdr-user-btn" onclick="showScreen('settings')">
       <div class="hdr-user-av" id="hdr-user-av">?</div>
       <span id="hdr-user-name">Inspector</span>
+      <span id="hdr-admin-badge" style="display:none;font-size:9px;background:rgba(255,255,255,.25);border-radius:4px;padding:1px 5px;margin-left:2px">ADMIN</span>
     </button>
   </div>
 </header>
@@ -737,7 +738,7 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
     <div class="fg"><label>Badge / ID #</label><input type="text" id="u-badge" placeholder="e.g. FI-204"></div>
     <div class="fg"><label>Email</label><input type="email" id="u-email" placeholder="inspector@yorktownny.gov"></div>
     <div class="fg"><label>Phone</label><input type="tel" id="u-phone" placeholder="(914) 555-1234"></div>
-    <div class="fg"><label>Role</label>
+    <div class="fg" id="u-role-wrap"><label>Role</label>
       <select id="u-role">
         <option value="Inspector">Fire Inspector</option>
         <option value="Senior Inspector">Senior Fire Inspector</option>
@@ -774,6 +775,7 @@ let _currentUser = null;  // {id, name, badge, email, phone, role}
 let _pendingLoginUser = null; // user selected, waiting for PIN
 let _pinEntry = '';
 
+// ─── user helpers ────────────────────────────────────
 function getUsers(){
   try{const d=localStorage.getItem('yfi_users');return d?JSON.parse(d):[];}catch(e){return [];}
 }
@@ -781,21 +783,43 @@ function saveUsers(users){
   try{localStorage.setItem('yfi_users',JSON.stringify(users));}catch(e){}
 }
 function userStorageKey(userId){return 'yfi_data_'+userId;}
+function isAdmin(u){return u&&(u.role==='Admin'||u.email==='avergo@yorktownny.gov');}
 
+// ─── seed admin on first boot ─────────────────────────
+function seedAdminIfNeeded(){
+  const users=getUsers();
+  const already=users.find(u=>u.email==='avergo@yorktownny.gov');
+  if(already) return;
+  users.unshift({
+    id:'usr_admin_avergo',
+    name:'Alex Vergo',
+    badge:'FI-001',
+    email:'avergo@yorktownny.gov',
+    phone:'',
+    role:'Admin',
+    pin:'0000',        // default PIN — admin should change on first login
+    approved:true,
+    createdAt:new Date().toISOString()
+  });
+  saveUsers(users);
+}
+
+// ─── boot ─────────────────────────────────────────────
 function bootApp(){
-  // Check for active session
+  seedAdminIfNeeded();
   try{
     const sess=sessionStorage.getItem('yfi_session');
     if(sess){
       const u=JSON.parse(sess);
       const users=getUsers();
-      const found=users.find(x=>x.id===u.id);
+      const found=users.find(x=>x.id===u.id&&x.approved);
       if(found){loginAs(found);return;}
     }
   }catch(e){}
   showLoginScreen();
 }
 
+// ─── login screen ─────────────────────────────────────
 function showLoginScreen(){
   document.getElementById('login-screen').classList.add('active');
   document.getElementById('main-app').style.display='none';
@@ -809,26 +833,37 @@ function showLoginScreen(){
 function renderLoginUsers(){
   const users=getUsers();
   const list=document.getElementById('login-user-list');
-  if(!users.length){
-    list.innerHTML=`<div style="text-align:center;padding:14px;color:var(--gray);font-size:13px">No inspectors added yet.<br>Tap <strong>Add New Inspector</strong> below.</div>`;
-    return;
+  const approved=users.filter(u=>u.approved);
+  const pending=users.filter(u=>!u.approved);
+  let html='';
+  if(!approved.length && !pending.length){
+    html=`<div style="text-align:center;padding:14px;color:var(--gray);font-size:13px">No inspectors added yet.</div>`;
+  } else {
+    html+=approved.map(u=>`
+      <button class="lu-btn" onclick="selectLoginUser('${u.id}')">
+        <div class="lu-avatar">${u.name.charAt(0).toUpperCase()}</div>
+        <div class="lu-info">
+          <div class="lu-name">${u.name}</div>
+          <div class="lu-role">${u.role||'Fire Inspector'}${u.badge?' · Badge '+u.badge:''}</div>
+        </div>
+        <span style="color:var(--gray);font-size:18px">›</span>
+      </button>
+    `).join('');
+    if(pending.length){
+      html+=`<div style="margin-top:10px;padding:10px 12px;background:#fef9e7;border-radius:8px;border:1px solid #f0c040;font-size:12px;color:#7d6608">
+        ⏳ <strong>${pending.length} account${pending.length>1?'s':''} pending admin approval</strong><br>
+        ${pending.map(u=>u.name).join(', ')}
+      </div>`;
+    }
   }
-  list.innerHTML=users.map(u=>`
-    <button class="lu-btn" onclick="selectLoginUser('${u.id}')">
-      <div class="lu-avatar">${u.name.charAt(0).toUpperCase()}</div>
-      <div class="lu-info">
-        <div class="lu-name">${u.name}</div>
-        <div class="lu-role">${u.role||'Fire Inspector'}${u.badge?' · Badge '+u.badge:''}</div>
-      </div>
-      <span style="color:var(--gray);font-size:18px">›</span>
-    </button>
-  `).join('');
+  list.innerHTML=html;
 }
 
 function selectLoginUser(userId){
   const users=getUsers();
   const u=users.find(x=>x.id===userId);
   if(!u) return;
+  if(!u.approved){alert('Your account is pending admin approval.');return;}
   _pendingLoginUser=u;
   _pinEntry='';
   updatePinDots();
@@ -875,7 +910,6 @@ function checkPin(){
 function loginAs(user){
   _currentUser=user;
   try{sessionStorage.setItem('yfi_session',JSON.stringify({id:user.id}));}catch(e){}
-  // Load this user's data
   try{
     const d=localStorage.getItem(userStorageKey(user.id));
     if(d){S={...S,...JSON.parse(d)};}
@@ -885,10 +919,11 @@ function loginAs(user){
                        deptName:'Town of Yorktown Building Department'},
              curBiz:null,curInsp:null,editBizId:null,editCertId:null};}
   }catch(e){}
-  // Update header
   document.getElementById('hdr-user-av').textContent=user.name.charAt(0).toUpperCase();
   document.getElementById('hdr-user-name').textContent=user.name.split(' ')[0];
-  // Show app
+  // Show admin badge in header if admin
+  const adminBadge=document.getElementById('hdr-admin-badge');
+  if(adminBadge) adminBadge.style.display=isAdmin(user)?'inline':'none';
   document.getElementById('login-screen').classList.remove('active');
   document.getElementById('main-app').style.display='block';
   showScreen('dashboard');
@@ -896,10 +931,9 @@ function loginAs(user){
 
 function logout(){
   if(!confirm('Log out of your session?')) return;
-  save(); // save current user data first
+  save();
   _currentUser=null;
   try{sessionStorage.removeItem('yfi_session');}catch(e){}
-  // Reset state
   S={businesses:[],inspections:[],violations:[],certifications:[],
      settings:{inspectorName:'',inspectorEmail:'',inspectorPhone:'',inspectorBadge:'',
                deptEmail:'building@yorktownny.gov',deptName:'Town of Yorktown Building Department'},
@@ -907,20 +941,30 @@ function logout(){
   showLoginScreen();
 }
 
-// User management
+// ─── user management ──────────────────────────────────
 let _editUserId=null;
+
 function openAddUser(){
   _editUserId=null;
   document.getElementById('user-mo-title').textContent='👤 Add Inspector';
   ['u-name','u-badge','u-email','u-phone','u-pin','u-pin2'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
+  document.getElementById('u-pin').placeholder='4 digits';
   document.getElementById('u-role').value='Inspector';
   document.getElementById('u-del-wrap').classList.add('hidden');
   document.getElementById('u-pin2-wrap').classList.remove('hidden');
+  // Show role selector only to admins
+  const roleWrap=document.getElementById('u-role-wrap');
+  if(roleWrap) roleWrap.style.display=(_currentUser&&isAdmin(_currentUser))?'block':'none';
   openMo('mo-user');
 }
+
 function editUser(userId){
+  // Only admins or the user themselves can edit
+  if(_currentUser&&!isAdmin(_currentUser)&&_currentUser.id!==userId){
+    alert('Only administrators can edit other users.');return;
+  }
   const users=getUsers();
   const u=users.find(x=>x.id===userId);
   if(!u) return;
@@ -936,39 +980,40 @@ function editUser(userId){
   document.getElementById('u-pin').placeholder='Leave blank to keep current PIN';
   document.getElementById('u-del-wrap').classList.remove('hidden');
   document.getElementById('u-pin2-wrap').classList.remove('hidden');
+  const roleWrap=document.getElementById('u-role-wrap');
+  if(roleWrap) roleWrap.style.display=(_currentUser&&isAdmin(_currentUser))?'block':'none';
   openMo('mo-user');
 }
+
 function saveUser(){
   const name=document.getElementById('u-name').value.trim();
   const pin=document.getElementById('u-pin').value.trim();
   const pin2=document.getElementById('u-pin2').value.trim();
   if(!name){alert('Name is required.');return;}
   if(!_editUserId){
-    // New user — PIN required
     if(!pin||pin.length<4){alert('Please enter a 4-digit PIN.');return;}
     if(pin!==pin2){alert('PINs do not match.');return;}
   } else {
-    // Edit — PIN only required if changing
-    if(pin && pin!==pin2){alert('PINs do not match.');return;}
-    if(pin && pin.length<4){alert('PIN must be 4 digits.');return;}
+    if(pin&&pin!==pin2){alert('PINs do not match.');return;}
+    if(pin&&pin.length<4){alert('PIN must be 4 digits.');return;}
   }
   const users=getUsers();
+  const callerIsAdmin=_currentUser&&isAdmin(_currentUser);
   if(_editUserId){
     const i=users.findIndex(x=>x.id===_editUserId);
     if(i>-1){
       users[i]={...users[i],
-        name,badge:document.getElementById('u-badge').value.trim(),
+        name,
+        badge:document.getElementById('u-badge').value.trim(),
         email:document.getElementById('u-email').value.trim(),
         phone:document.getElementById('u-phone').value.trim(),
-        role:document.getElementById('u-role').value
+        role:callerIsAdmin?document.getElementById('u-role').value:users[i].role
       };
       if(pin) users[i].pin=pin;
-      // If editing current user, update header
       if(_currentUser&&_currentUser.id===_editUserId){
         _currentUser={..._currentUser,...users[i]};
         document.getElementById('hdr-user-av').textContent=name.charAt(0).toUpperCase();
         document.getElementById('hdr-user-name').textContent=name.split(' ')[0];
-        // Also update settings
         S.settings.inspectorName=name;
         S.settings.inspectorEmail=users[i].email||S.settings.inspectorEmail;
         S.settings.inspectorPhone=users[i].phone||S.settings.inspectorPhone;
@@ -977,23 +1022,50 @@ function saveUser(){
       }
     }
   } else {
-    users.push({
+    // New user — if added by admin, auto-approve; otherwise pending
+    const newUser={
       id:'usr_'+Date.now(),
-      name,badge:document.getElementById('u-badge').value.trim(),
+      name,
+      badge:document.getElementById('u-badge').value.trim(),
       email:document.getElementById('u-email').value.trim(),
       phone:document.getElementById('u-phone').value.trim(),
-      role:document.getElementById('u-role').value,
-      pin
-    });
+      role:callerIsAdmin?document.getElementById('u-role').value:'Inspector',
+      pin,
+      approved:!!callerIsAdmin,  // admin-created = immediately approved
+      createdAt:new Date().toISOString()
+    };
+    users.push(newUser);
+    if(!callerIsAdmin){
+      alert('✅ Account request submitted!\n\nAn administrator must approve your account before you can log in.');
+    }
   }
   saveUsers(users);
   closeMo('mo-user');
-  // Refresh user list if on login screen, or user management in settings
   renderLoginUsers();
   renderUserManagement();
 }
+
+function approveUser(userId){
+  if(!_currentUser||!isAdmin(_currentUser)){alert('Admin access required.');return;}
+  const users=getUsers();
+  const u=users.find(x=>x.id===userId);
+  if(u){u.approved=true;saveUsers(users);renderUserManagement();renderLoginUsers();}
+}
+
+function rejectUser(userId){
+  if(!_currentUser||!isAdmin(_currentUser)){alert('Admin access required.');return;}
+  if(!confirm('Reject and remove this account request?')) return;
+  let users=getUsers();
+  users=users.filter(u=>u.id!==userId);
+  saveUsers(users);
+  renderUserManagement();
+  renderLoginUsers();
+}
+
 function deleteUser(){
   if(!_editUserId) return;
+  if(!_currentUser||!isAdmin(_currentUser)){alert('Only administrators can remove users.');return;}
+  if(_editUserId===_currentUser.id){alert('You cannot remove your own account.');return;}
   if(!confirm('Remove this inspector? Their inspection data will remain but they will no longer be able to log in.')) return;
   let users=getUsers();
   users=users.filter(u=>u.id!==_editUserId);
@@ -1002,24 +1074,48 @@ function deleteUser(){
   renderLoginUsers();
   renderUserManagement();
 }
+
 function renderUserManagement(){
   const el=document.getElementById('user-mgmt-list');
   if(!el) return;
   const users=getUsers();
+  const callerIsAdmin=_currentUser&&isAdmin(_currentUser);
   if(!users.length){
     el.innerHTML='<div style="color:var(--gray);font-size:13px;padding:8px 0">No inspectors added yet.</div>';
     return;
   }
-  el.innerHTML=users.map(u=>`
+  const approved=users.filter(u=>u.approved);
+  const pending=users.filter(u=>!u.approved);
+  let html='';
+  if(pending.length&&callerIsAdmin){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⏳ Pending Approval (${pending.length})</div>`;
+    html+=pending.map(u=>`
+      <div class="um-row" style="background:#fef9e7;border-radius:8px;padding:10px;margin-bottom:6px">
+        <div class="um-avatar" style="background:linear-gradient(135deg,#935116,var(--orange))">${u.name.charAt(0).toUpperCase()}</div>
+        <div class="um-info">
+          <div class="um-name">${u.name}</div>
+          <div class="um-meta">${u.email||'No email'}${u.badge?' · '+u.badge:''}</div>
+          <div class="um-meta" style="color:var(--gray)">Requested: ${new Date(u.createdAt).toLocaleDateString()}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <button class="btn btn-sm btn-green" onclick="approveUser('${u.id}')">✅ Approve</button>
+          <button class="btn btn-sm btn-gray" onclick="rejectUser('${u.id}')">✕ Reject</button>
+        </div>
+      </div>
+    `).join('');
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--gray);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px">Active Inspectors (${approved.length})</div>`;
+  }
+  html+=approved.map(u=>`
     <div class="um-row">
       <div class="um-avatar">${u.name.charAt(0).toUpperCase()}</div>
       <div class="um-info">
-        <div class="um-name">${u.name}</div>
+        <div class="um-name">${u.name}${u.role==='Admin'?'<span class="badge bdr" style="margin-left:5px;font-size:9px">Admin</span>':''}</div>
         <div class="um-meta">${u.role||'Inspector'}${u.badge?' · '+u.badge:''}</div>
       </div>
-      <button class="btn btn-sm btn-blue" onclick="editUser('${u.id}')">✏️</button>
+      ${callerIsAdmin?`<button class="btn btn-sm btn-blue" onclick="editUser('${u.id}')">✏️</button>`:''}
     </div>
   `).join('');
+  el.innerHTML=html;
 }
 
 // ═══════════════════════════════════════════════════
