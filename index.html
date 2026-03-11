@@ -726,7 +726,9 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
   </div>
 </div>
 
-<!-- MODAL: Add/Edit User -->
+</div><!-- end #main-app -->
+
+<!-- MODAL: Add/Edit User — outside #main-app so accessible from login screen too -->
 <div class="mo" id="mo-user">
   <div class="md">
     <div class="md-handle"></div>
@@ -750,9 +752,6 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
     <div class="fg" id="u-pin2-wrap"><label>Confirm PIN *</label>
       <input type="password" id="u-pin2" maxlength="4" placeholder="Re-enter PIN" inputmode="numeric" pattern="[0-9]{4}">
     </div>
-    <div id="u-admin-badge" class="hidden">
-      <div class="al al-blue" style="margin-bottom:12px"><span>🛡️</span><div>Admin accounts can manage users and system settings.</div></div>
-    </div>
     <div class="flex gap8">
       <button class="btn btn-gray" style="flex:1" onclick="closeMo('mo-user')">Cancel</button>
       <button class="btn btn-red" style="flex:1" onclick="saveUser()">Save</button>
@@ -762,8 +761,6 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
     </div>
   </div>
 </div>
-
-</div><!-- end #main-app -->
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -2527,8 +2524,9 @@ function downloadTemplate(){
 // ═══════════════════════════════════════════════════
 function openMo(id){document.getElementById(id).classList.add('open');}
 function closeMo(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.mo').forEach(o=>{
-  o.addEventListener('click',function(e){if(e.target===this)closeMo(this.id);});
+// Use delegation so mo-user (outside #main-app) is also covered
+document.addEventListener('click',function(e){
+  if(e.target.classList.contains('mo'))closeMo(e.target.id);
 });
 
 // ═══════════════════════════════════════════════════
