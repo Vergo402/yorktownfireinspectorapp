@@ -237,6 +237,23 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .upload-zone .uz-icon{font-size:40px;margin-bottom:8px}
 .upload-zone p{font-size:13px;color:var(--gray)}
 .upload-zone strong{color:var(--red)}
+
+/* ARCHIVE / FILTER TABS */
+.filter-tabs{display:flex;gap:0;margin-bottom:13px;border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+.ftab{flex:1;padding:9px 6px;border:none;background:#eee;cursor:pointer;font-size:12px;font-weight:700;font-family:var(--font);transition:all .2s;color:var(--gray)}
+.ftab.active{background:var(--red);color:#fff}
+.ftab.ftab-active-items{background:#eee}.ftab.ftab-active-items.active{background:var(--blue);color:#fff}
+.ftab.ftab-archived.active{background:#7f8c8d;color:#fff}
+
+/* ARCHIVED PROPERTY / ITEM row */
+.bi-archived{opacity:.7;background:#f8f9fa}
+.bi-archived .bico{background:#eaeded;color:#777}
+
+/* INSPECTION HISTORY */
+.ih-row{padding:11px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.ih-row:last-child{border-bottom:none}
+.ih-date{font-size:12px;font-weight:700;color:#2c3e50}
+.ih-meta{font-size:11px;color:var(--gray);margin-top:2px}
 </style>
 </head>
 <body>
@@ -312,6 +329,10 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
     <h2 style="font-size:17px;font-weight:800">Properties</h2>
     <button class="btn btn-red btn-sm" onclick="openAddBiz()">＋ Add</button>
   </div>
+  <div class="filter-tabs">
+    <button class="ftab ftab-active-items active" id="btab-active" onclick="switchBizTab('active')">🏢 Active</button>
+    <button class="ftab ftab-archived" id="btab-archived" onclick="switchBizTab('archived')">📦 Archived</button>
+  </div>
   <div class="sw"><span class="si">🔍</span><input type="text" id="biz-search" placeholder="Search by name or address…" oninput="renderBizList()"></div>
   <div class="card"><div id="biz-list"></div></div>
 </div>
@@ -348,6 +369,10 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
   <div class="flex jb ac" style="margin-bottom:13px">
     <h2 style="font-size:17px;font-weight:800">Violation Log</h2>
     <span class="badge bdr" id="vc-badge">0</span>
+  </div>
+  <div class="filter-tabs">
+    <button class="ftab ftab-active-items active" id="vtab-open" onclick="switchViolTab('open')">🔴 Open</button>
+    <button class="ftab ftab-archived" id="vtab-resolved" onclick="switchViolTab('resolved')">✅ Resolved Archive</button>
   </div>
   <div class="sw"><span class="si">🔍</span><input type="text" id="viol-search" placeholder="Search violations…" oninput="renderViols()"></div>
   <div id="viol-list"></div>
@@ -449,6 +474,15 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
   </div>
 </div>
 
+<!-- MODAL: Inspection History -->
+<div class="mo" id="mo-insp-hist">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title" id="insp-hist-title">📋 Inspection History</div>
+    <div id="insp-hist-list"><div class="es" style="padding:18px"><p>Loading…</p></div></div>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav id="bot-nav">
   <button class="nb active" id="nav-dashboard" onclick="showScreen('dashboard')"><span class="ni">🏠</span>Home</button>
@@ -468,6 +502,8 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
       <button class="btn btn-blue btn-full" onclick="closeMo('mo-more');showScreen('certs')">🎖️ Certifications</button>
       <button class="btn btn-gray btn-full" onclick="closeMo('mo-more');showScreen('settings')">⚙️ Settings</button>
       <button class="btn btn-gray btn-full" onclick="closeMo('mo-more');openBulkUpload()">📤 Bulk Upload</button>
+      <button class="btn btn-orange btn-full" onclick="closeMo('mo-more');switchBizTab('archived');showScreen('businesses')">📦 Property Archive</button>
+      <button class="btn btn-orange btn-full" onclick="closeMo('mo-more');switchViolTab('resolved');showScreen('violations')">✅ Resolved Violations</button>
     </div>
   </div>
 </div>
@@ -783,6 +819,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // ─── RTDB helpers ─────────────────────────────────────
+// Archive paths:  archived_businesses/{bizId}, archived_violations/{violId}
 function dbRef(path){ return db.ref(path); }
 
 // Write a value (set); key is the record id
@@ -1024,6 +1061,14 @@ function attachRtdbListeners(user){
   });
   _rtdbListeners.push({ref:violRef, handler:violH, event:'value'});
 
+  // SHARED: archived businesses
+  const archBizRef = dbRef('archived_businesses');
+  const archBizH = archBizRef.on('value', snap=>{
+    S.archivedBusinesses = snap.val() ? Object.values(snap.val()) : [];
+    if(_bizTab==='archived' && document.getElementById('screen-businesses')?.classList.contains('active')) renderBizList();
+  });
+  _rtdbListeners.push({ref:archBizRef, handler:archBizH, event:'value'});
+
   // PER-USER: certifications
   const certRef = dbRef('certifications/'+user.id);
   const certH = certRef.on('value', snap=>{
@@ -1225,9 +1270,12 @@ let S = {
   inspections:[],
   violations:[],
   certifications:[],
+  archivedBusinesses:[], // from /archived_businesses/
   settings:{inspectorName:'',inspectorEmail:'',inspectorPhone:'',inspectorBadge:'',deptEmail:'building@yorktownny.gov',deptName:'Town of Yorktown Building Department'},
   curBiz:null, curInsp:null, editBizId:null, editCertId:null
 };
+let _bizTab = 'active';   // 'active' | 'archived'
+let _violTab = 'open';    // 'open'   | 'resolved'
 // Occupancies that default to 1-year reinspection cycle
 const HIGH_RISK_OCC = ['A-1','A-2','A-3','A-4','A-5','E','H-1','H-2','H-3','H-4','H-5','I-1','I-2','I-3','I-4','R-1'];
 let _bulkPreviewData = [];
@@ -1259,13 +1307,46 @@ function fbDeleteCert(certId){
 }
 // Remove a violation
 function fbDeleteViol(violId){ return dbRemove('violations/'+violId); }
-// Remove a business and all its related data
+// Remove a business and all its related data (permanent delete)
 function fbDeleteBiz(bizId){
   dbRemove('businesses/'+bizId);
-  // Remove associated inspections
   S.inspections.filter(i=>i.bizId===bizId).forEach(i=>dbRemove('inspections/'+i.id));
-  // Remove associated violations
   S.violations.filter(v=>v.bizId===bizId).forEach(v=>dbRemove('violations/'+v.id));
+}
+
+// Archive a business (move to /archived_businesses/)
+function fbArchiveBiz(bizId){
+  const biz=S.businesses.find(b=>b.id===bizId); if(!biz) return;
+  const archived={...biz, archivedAt:new Date().toISOString(), archived:true};
+  Promise.all([
+    dbSet('archived_businesses/'+bizId, archived),
+    dbRemove('businesses/'+bizId)
+  ]);
+}
+
+// Restore an archived business back to /businesses/
+function fbRestoreBiz(bizId){
+  const biz=S.archivedBusinesses.find(b=>b.id===bizId); if(!biz) return;
+  const restored={...biz};
+  delete restored.archivedAt; delete restored.archived;
+  Promise.all([
+    dbSet('businesses/'+bizId, restored),
+    dbRemove('archived_businesses/'+bizId)
+  ]);
+}
+
+// Permanently delete archived business
+function fbDeleteArchivedBiz(bizId){
+  dbRemove('archived_businesses/'+bizId);
+  S.inspections.filter(i=>i.bizId===bizId).forEach(i=>dbRemove('inspections/'+i.id));
+  S.violations.filter(v=>v.bizId===bizId).forEach(v=>dbRemove('violations/'+v.id));
+}
+
+// Delete a single inspection permanently
+function fbDeleteInsp(inspId){
+  // Also remove any violations linked to this inspection
+  S.violations.filter(v=>v.inspectionId===inspId).forEach(v=>dbRemove('violations/'+v.id));
+  dbRemove('inspections/'+inspId);
 }
 
 // ═══════════════════════════════════════════════════
@@ -2206,20 +2287,67 @@ function saveBiz(){
   // renderBizList will be called by RTDB listener
 }
 
+function archiveBiz(bizId){
+  const biz=S.businesses.find(b=>b.id===bizId); if(!biz) return;
+  if(!confirm(`Archive "${biz.name}"?\n\nThe property will be moved to the Archive. Inspection history is preserved. You can restore it at any time.`)) return;
+  fbArchiveBiz(bizId);
+}
+
 function delBiz(bizId){
-  if(!confirm('Delete this property and all associated data?')) return;
+  const biz=S.businesses.find(b=>b.id===bizId); if(!biz) return;
+  if(!confirm(`⚠️ Permanently DELETE "${biz.name}"?\n\nThis will also delete ALL inspection records and violations for this property.\n\nThis cannot be undone. Consider archiving instead.`)) return;
+  if(!confirm('Second confirmation: permanently delete this property and all its data?')) return;
   fbDeleteBiz(bizId);
-  // renderBizList called by RTDB listener
+}
+
+function confirmDeleteArchivedBiz(bizId){
+  const biz=S.archivedBusinesses.find(b=>b.id===bizId); if(!biz) return;
+  if(!confirm(`⚠️ Permanently delete archived property "${biz.name}"?\n\nAll inspection records and violations will also be deleted. This cannot be undone.`)) return;
+  fbDeleteArchivedBiz(bizId);
+}
+
+function switchBizTab(tab){
+  _bizTab=tab;
+  ['active','archived'].forEach(t=>{
+    const el=document.getElementById('btab-'+t);
+    if(el) el.classList.toggle('active',t===tab);
+  });
+  renderBizList();
 }
 
 function renderBizList(){
   const q=(document.getElementById('biz-search')?.value||'').toLowerCase();
   const list=document.getElementById('biz-list');
+
+  if(_bizTab==='archived'){
+    const filt=S.archivedBusinesses.filter(b=>b.name.toLowerCase().includes(q)||b.address.toLowerCase().includes(q));
+    if(!filt.length){list.innerHTML=`<div class="es"><div class="ei">📦</div><p>${!S.archivedBusinesses.length?'No archived properties.':'No results.'}</p></div>`;return;}
+    list.innerHTML=filt.map(biz=>`
+      <div class="bi bi-archived">
+        <div class="bico">${OI[biz.occupancy]||'🏢'}</div>
+        <div class="binfo">
+          <div class="bname">${biz.name} <span class="badge bdgr">ARCHIVED</span></div>
+          <div class="baddr">${biz.address}, ${biz.city}</div>
+          <div class="bmeta">
+            <span class="badge bdb">${OL[biz.occupancy]||biz.occupancy}</span>
+            ${biz.archivedAt?`<span class="badge bdgr">Archived ${new Date(biz.archivedAt).toLocaleDateString()}</span>`:''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+          <button class="btn btn-sm btn-green" onclick="event.stopPropagation();fbRestoreBiz('${biz.id}')" title="Restore to active">↩️ Restore</button>
+          <button class="btn btn-sm btn-gray" onclick="event.stopPropagation();confirmDeleteArchivedBiz('${biz.id}')" title="Delete permanently">🗑️ Delete</button>
+        </div>
+      </div>`).join('');
+    return;
+  }
+
+  // Active tab
   const filt=S.businesses.filter(b=>b.name.toLowerCase().includes(q)||b.address.toLowerCase().includes(q));
   if(!filt.length){list.innerHTML=`<div class="es"><div class="ei">🏢</div><p>${!S.businesses.length?'No properties yet.':'No results.'}</p></div>`;return;}
   list.innerHTML=filt.map(biz=>{
     const last=S.inspections.filter(i=>i.bizId===biz.id&&i.status==='completed').sort((a,b)=>new Date(b.completedDate)-new Date(a.completedDate))[0];
     const ov=S.violations.filter(v=>v.bizId===biz.id&&v.status==='open').length;
+    const inspCount=S.inspections.filter(i=>i.bizId===biz.id&&i.status==='completed').length;
     return `
       <div class="bi" onclick="startInsp('${biz.id}')">
         <div class="bico">${OI[biz.occupancy]||'🏢'}</div>
@@ -2234,11 +2362,13 @@ function renderBizList(){
             ${biz.liion&&biz.liion!=='none'?'<span class="badge bdp">🔋</span>':''}
             ${ov>0?`<span class="badge bdr">⚠️ ${ov}</span>`:'<span class="badge bdg">✓ OK</span>'}
             ${last?`<span class="badge bdgr">${new Date(last.completedDate).toLocaleDateString()}</span>`:'<span class="badge bdy">Never inspected</span>'}
+            ${inspCount>0?`<span class="badge bdp" style="cursor:pointer" onclick="event.stopPropagation();openInspHistory('${biz.id}')">📋 ${inspCount} Inspections</span>`:''}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
           <button class="btn btn-sm btn-blue" onclick="event.stopPropagation();editBiz('${biz.id}')">✏️</button>
-          <button class="btn btn-sm btn-gray" onclick="event.stopPropagation();delBiz('${biz.id}')">🗑️</button>
+          <button class="btn btn-sm btn-orange" onclick="event.stopPropagation();archiveBiz('${biz.id}')" title="Archive property">📦</button>
+          <button class="btn btn-sm btn-gray" onclick="event.stopPropagation();delBiz('${biz.id}')" title="Delete permanently">🗑️</button>
         </div>
       </div>`;
   }).join('');
@@ -2247,14 +2377,33 @@ function renderBizList(){
 // ═══════════════════════════════════════════════════
 //  VIOLATIONS
 // ═══════════════════════════════════════════════════
+function switchViolTab(tab){
+  _violTab=tab;
+  ['open','resolved'].forEach(t=>{
+    const el=document.getElementById('vtab-'+t);
+    if(el) el.classList.toggle('active',t===tab);
+  });
+  renderViols();
+}
+
 function renderViols(){
   const q=(document.getElementById('viol-search')?.value||'').toLowerCase();
-  const filt=S.violations.filter(v=>v.bizName.toLowerCase().includes(q)||v.label.toLowerCase().includes(q)||v.code.toLowerCase().includes(q));
-  document.getElementById('vc-badge').textContent=S.violations.filter(v=>v.status==='open').length;
-  if(!filt.length){document.getElementById('viol-list').innerHTML=`<div class="es"><div class="ei">✅</div><p>No violations logged.</p></div>`;return;}
+  const openCount=S.violations.filter(v=>v.status==='open').length;
+  document.getElementById('vc-badge').textContent=openCount;
+
+  const showing=_violTab==='open'
+    ? S.violations.filter(v=>v.status==='open')
+    : S.violations.filter(v=>v.status!=='open'); // resolved
+
+  const filt=showing.filter(v=>(v.bizName||'').toLowerCase().includes(q)||(v.label||'').toLowerCase().includes(q)||(v.code||'').toLowerCase().includes(q));
+
+  if(!filt.length){
+    document.getElementById('viol-list').innerHTML=`<div class="es"><div class="ei">${_violTab==='open'?'✅':'📂'}</div><p>${_violTab==='open'?'No open violations!':'No resolved violations archived yet.'}</p></div>`;
+    return;
+  }
   document.getElementById('viol-list').innerHTML=filt.map(v=>`
     <div class="card" style="margin-bottom:9px">
-      <div class="vi" style="border-left-color:${v.critical?'var(--red)':'var(--orange)'}">
+      <div class="vi" style="border-left-color:${v.critical?'var(--red)':'var(--orange)'}${v.status!=='open'?';opacity:.75':''}">
         <div class="vi-hdr">
           <div>
             <div class="vi-title">${v.critical?'★ ':''}${v.label}</div>
@@ -2262,11 +2411,13 @@ function renderViols(){
             <div class="vi-code">${v.code}</div>
             ${v.note?`<div class="vi-detail">📝 ${v.note}</div>`:''}
             <div class="vi-detail">📅 ${new Date(v.date).toLocaleDateString()} · ${v.sectionTitle}</div>
+            ${v.resolvedDate?`<div class="vi-detail" style="color:var(--green)">✅ Resolved ${new Date(v.resolvedDate).toLocaleDateString()}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0">
             ${v.critical?'<span class="badge bdr">CRITICAL</span>':'<span class="badge bdo">STANDARD</span>'}
             <span class="badge ${v.status==='open'?'bdr':'bdg'}">${v.status==='open'?'OPEN':'RESOLVED'}</span>
             ${v.status==='open'?`<button class="btn btn-sm btn-green" onclick="resolveViol('${v.id}')">✓ Resolve</button>`:''}
+            <button class="btn btn-sm btn-gray" onclick="deleteViol('${v.id}')" title="Delete violation record">🗑️</button>
           </div>
         </div>
       </div>
@@ -2275,10 +2426,17 @@ function renderViols(){
 
 function resolveViol(id){
   const v=S.violations.find(x=>x.id===id);
-  if(v&&confirm(`Mark as resolved?\n\n"${v.label}"`)){
+  if(v&&confirm(`Mark as resolved?\n\n"${v.label}"\n\nThis will move the violation to the Resolved Archive.`)){
     dbUpdate('violations/'+id,{status:'resolved',resolvedDate:new Date().toISOString()});
-    // renderViols called by listener
+    // renderViols called by listener; switch to resolved tab for confirmation
   }
+}
+
+function deleteViol(id){
+  const v=S.violations.find(x=>x.id===id);
+  if(!v) return;
+  if(!confirm(`Delete this violation record?\n\n"${v.label}"\n\nThis cannot be undone.`)) return;
+  fbDeleteViol(id);
 }
 
 // ═══════════════════════════════════════════════════
@@ -2763,6 +2921,76 @@ function downloadTemplate(){
   const a=document.createElement('a');
   a.href=url;a.download='yorktown_fire_properties_template.csv';
   a.click();URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════
+//  INSPECTION HISTORY
+// ═══════════════════════════════════════════════════
+function openInspHistory(bizId){
+  const biz=S.businesses.find(b=>b.id===bizId)||S.archivedBusinesses.find(b=>b.id===bizId);
+  if(!biz) return;
+  document.getElementById('insp-hist-title').textContent=`📋 ${biz.name} – Inspection History`;
+  const inspections=S.inspections
+    .filter(i=>i.bizId===bizId && i.status==='completed')
+    .sort((a,b)=>new Date(b.completedDate)-new Date(a.completedDate));
+  const drafts=S.inspections.filter(i=>i.bizId===bizId && i.status==='draft');
+
+  if(!inspections.length && !drafts.length){
+    document.getElementById('insp-hist-list').innerHTML=`<div class="es" style="padding:22px"><div class="ei" style="font-size:36px">📋</div><p>No inspections on record for this property.</p></div>`;
+    openMo('mo-insp-hist');
+    return;
+  }
+
+  let html='';
+  if(drafts.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">⏳ Draft Inspections (${drafts.length})</div>`;
+    html+=drafts.map(i=>`
+      <div class="ih-row" style="background:#fef9e7">
+        <div style="flex:1">
+          <div class="ih-date">Draft – started ${new Date(i.date).toLocaleDateString()}</div>
+          <div class="ih-meta">Inspector: ${i.signature||'In progress'}</div>
+        </div>
+        <button class="btn btn-sm btn-gray" onclick="confirmDeleteInsp('${i.id}')" title="Delete draft">🗑️ Delete</button>
+      </div>`).join('');
+    html+=`<div class="divider"></div>`;
+  }
+
+  if(inspections.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--gray);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Completed Inspections (${inspections.length})</div>`;
+    html+=inspections.map(i=>{
+      const violCount=S.violations.filter(v=>v.inspectionId===i.id).length;
+      const openV=S.violations.filter(v=>v.inspectionId===i.id&&v.status==='open').length;
+      return `
+        <div class="ih-row">
+          <div style="flex:1">
+            <div class="ih-date">📅 ${new Date(i.completedDate).toLocaleDateString()}</div>
+            <div class="ih-meta">
+              Inspector: ${i.signature||'Unknown'}
+              ${violCount>0?` · <span style="color:var(--red)">⚠️ ${violCount} violation(s)${openV>0?' ('+openV+' open)':' (all resolved)'}</span>`:' · <span style="color:var(--green)">✓ Clean</span>'}
+            </div>
+          </div>
+          <button class="btn btn-sm btn-gray" onclick="confirmDeleteInsp('${i.id}')" title="Delete inspection record" style="flex-shrink:0">🗑️</button>
+        </div>`;
+    }).join('');
+  }
+
+  document.getElementById('insp-hist-list').innerHTML=html||'<div class="es" style="padding:18px"><p>No inspection records.</p></div>';
+  openMo('mo-insp-hist');
+}
+
+function confirmDeleteInsp(inspId){
+  const insp=S.inspections.find(i=>i.id===inspId); if(!insp) return;
+  const biz=insp.bizName||'this property';
+  const dt=insp.completedDate?new Date(insp.completedDate).toLocaleDateString():new Date(insp.date).toLocaleDateString();
+  const violCount=S.violations.filter(v=>v.inspectionId===inspId).length;
+  if(!confirm(`Delete this inspection record?\n\n${biz} – ${dt}${violCount>0?'\n\n⚠️ This will also delete '+violCount+' linked violation(s).':''}\n\nThis cannot be undone.`)) return;
+  fbDeleteInsp(inspId);
+  // Refresh the history modal after delete (listener will update S.inspections)
+  setTimeout(()=>{
+    const bizId=insp.bizId;
+    // re-render modal if still open
+    if(document.getElementById('mo-insp-hist').classList.contains('open')) openInspHistory(bizId);
+  },600);
 }
 
 // ═══════════════════════════════════════════════════
