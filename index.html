@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Yorktown Fire Inspection App</title>
+<!-- Firebase SDK (compat v9 – works as global firebase.*) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 :root {
   --red:#c0392b; --dark-red:#922b21; --orange:#e67e22; --green:#27ae60;
@@ -765,55 +768,109 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 
 <script>
 // ═══════════════════════════════════════════════════
+//  FIREBASE INIT
+// ═══════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyCUxHSx_LaE3JxK-DR47f1S8RZikmvWFn4",
+  authDomain: "yorktownfireinspections.firebaseapp.com",
+  databaseURL: "https://yorktownfireinspections-default-rtdb.firebaseio.com",
+  projectId: "yorktownfireinspections",
+  storageBucket: "yorktownfireinspections.firebasestorage.app",
+  messagingSenderId: "870337491129",
+  appId: "1:870337491129:web:8bd0f766536320cc252b68"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ─── RTDB helpers ─────────────────────────────────────
+function dbRef(path){ return db.ref(path); }
+
+// Write a value (set); key is the record id
+function dbSet(path, data){ return dbRef(path).set(data); }
+
+// Update specific fields at a path
+function dbUpdate(path, data){ return dbRef(path).update(data); }
+
+// Remove a node
+function dbRemove(path){ return dbRef(path).remove(); }
+
+// One-time read
+function dbGet(path){ return dbRef(path).get(); }
+
+// ═══════════════════════════════════════════════════
 //  MULTI-USER AUTH
 // ═══════════════════════════════════════════════════
-// Users stored in localStorage key 'yfi_users' as array of {id,name,badge,email,phone,role,pin}
-// Each user's inspection data stored under 'yfi_data_<userId>'
-// Active session stored in sessionStorage 'yfi_session'
+// Users stored in RTDB /users/{userId}
+// Businesses, inspections, violations are SHARED across all users
+// Certifications and settings are per-user: /certifications/{userId}/ and /settings/{userId}/
+// Active session stored in sessionStorage 'yfi_session' (no Firebase Auth)
 
 let _currentUser = null;  // {id, name, badge, email, phone, role}
 let _pendingLoginUser = null; // user selected, waiting for PIN
 let _pinEntry = '';
+let _rtdbListeners = []; // track attached listeners for cleanup on logout
+let _usersCache = {}; // local mirror of /users/
 
-// ─── user helpers ────────────────────────────────────
+// ─── live /users/ listener (always on, for login screen) ─
+let _usersListenerOn = false;
+function startUsersListener(){
+  if(_usersListenerOn) return;
+  _usersListenerOn = true;
+  dbRef('users').on('value', snap => {
+    _usersCache = snap.val() || {};
+    renderLoginUsers();
+    renderUserManagement();
+  });
+}
+
+// ─── user helpers (now read from _usersCache) ────────────
 function getUsers(){
-  try{const d=localStorage.getItem('yfi_users');return d?JSON.parse(d):[];}catch(e){return [];}
+  return Object.values(_usersCache);
 }
-function saveUsers(users){
-  try{localStorage.setItem('yfi_users',JSON.stringify(users));}catch(e){}
-}
-function userStorageKey(userId){return 'yfi_data_'+userId;}
 function isAdmin(u){return u&&(u.role==='Admin'||u.email==='avergo@yorktownny.gov');}
+
+// ─── write a user to Firebase ────────────────────────────
+function fbSaveUser(user){
+  return dbSet('users/'+user.id, user);
+}
 
 // ─── seed admin on first boot ─────────────────────────
 function seedAdminIfNeeded(){
-  const users=getUsers();
-  const already=users.find(u=>u.email==='avergo@yorktownny.gov');
-  if(already) return;
-  users.unshift({
-    id:'usr_admin_avergo',
-    name:'Alex Vergo',
-    badge:'FI-001',
-    email:'avergo@yorktownny.gov',
-    phone:'',
-    role:'Admin',
-    pin:'0000',        // default PIN — admin should change on first login
-    approved:true,
-    createdAt:new Date().toISOString()
+  dbGet('users/usr_admin_avergo').then(snap=>{
+    if(snap.exists()) return;
+    const admin = {
+      id:'usr_admin_avergo',
+      name:'Alex Vergo',
+      badge:'FI-001',
+      email:'avergo@yorktownny.gov',
+      phone:'',
+      role:'Admin',
+      pin:'0000',
+      approved:true,
+      createdAt:new Date().toISOString()
+    };
+    dbSet('users/usr_admin_avergo', admin);
   });
-  saveUsers(users);
 }
 
 // ─── boot ─────────────────────────────────────────────
 function bootApp(){
   seedAdminIfNeeded();
+  startUsersListener();
+  // Try to restore session; users will be available once listener fires
   try{
     const sess=sessionStorage.getItem('yfi_session');
     if(sess){
-      const u=JSON.parse(sess);
-      const users=getUsers();
-      const found=users.find(x=>x.id===u.id&&x.approved);
-      if(found){loginAs(found);return;}
+      const {id}=JSON.parse(sess);
+      // Wait for users to load, then auto-login
+      dbGet('users/'+id).then(snap=>{
+        if(snap.exists()){
+          const u=snap.val();
+          if(u.approved){loginAs(u);return;}
+        }
+        showLoginScreen();
+      }).catch(()=>showLoginScreen());
+      return;
     }
   }catch(e){}
   showLoginScreen();
@@ -831,8 +888,9 @@ function showLoginScreen(){
 }
 
 function renderLoginUsers(){
-  const users=getUsers();
   const list=document.getElementById('login-user-list');
+  if(!list) return;
+  const users=getUsers();
   const approved=users.filter(u=>u.approved);
   const pending=users.filter(u=>!u.approved);
   let html='';
@@ -860,8 +918,7 @@ function renderLoginUsers(){
 }
 
 function selectLoginUser(userId){
-  const users=getUsers();
-  const u=users.find(x=>x.id===userId);
+  const u=_usersCache[userId];
   if(!u) return;
   if(!u.approved){alert('Your account is pending admin approval.');return;}
   _pendingLoginUser=u;
@@ -910,18 +967,25 @@ function checkPin(){
 function loginAs(user){
   _currentUser=user;
   try{sessionStorage.setItem('yfi_session',JSON.stringify({id:user.id}));}catch(e){}
-  try{
-    const d=localStorage.getItem(userStorageKey(user.id));
-    if(d){S={...S,...JSON.parse(d)};}
-    else{S={businesses:[],inspections:[],violations:[],certifications:[],
-             settings:{inspectorName:user.name,inspectorEmail:user.email||'',inspectorPhone:user.phone||'',
-                       inspectorBadge:user.badge||'',deptEmail:'building@yorktownny.gov',
-                       deptName:'Town of Yorktown Building Department'},
-             curBiz:null,curInsp:null,editBizId:null,editCertId:null};}
-  }catch(e){}
+  // Reset state
+  S.businesses=[];S.inspections=[];S.violations=[];S.certifications=[];
+  S.curBiz=null;S.curInsp=null;S.editBizId=null;
+  // Load per-user settings from Firebase, then attach shared listeners
+  dbGet('settings/'+user.id).then(snap=>{
+    if(snap.exists()){
+      S.settings={...S.settings,...snap.val()};
+    } else {
+      S.settings={
+        inspectorName:user.name, inspectorEmail:user.email||'',
+        inspectorPhone:user.phone||'', inspectorBadge:user.badge||'',
+        deptEmail:'building@yorktownny.gov',
+        deptName:'Town of Yorktown Building Department'
+      };
+    }
+    attachRtdbListeners(user);
+  }).catch(()=>{ attachRtdbListeners(user); });
   document.getElementById('hdr-user-av').textContent=user.name.charAt(0).toUpperCase();
   document.getElementById('hdr-user-name').textContent=user.name.split(' ')[0];
-  // Show admin badge in header if admin
   const adminBadge=document.getElementById('hdr-admin-badge');
   if(adminBadge) adminBadge.style.display=isAdmin(user)?'inline':'none';
   document.getElementById('login-screen').classList.remove('active');
@@ -929,9 +993,55 @@ function loginAs(user){
   showScreen('dashboard');
 }
 
+// ─── attach real-time listeners for shared + per-user data ───
+function attachRtdbListeners(user){
+  detachRtdbListeners(); // remove any old ones
+
+  // SHARED: businesses
+  const bizRef = dbRef('businesses');
+  const bizH = bizRef.on('value', snap=>{
+    S.businesses = snap.val() ? Object.values(snap.val()) : [];
+    if(document.getElementById('screen-businesses')?.classList.contains('active')) renderBizList();
+    if(document.getElementById('screen-reinspections')?.classList.contains('active')) renderReinspections();
+    renderDash();
+  });
+  _rtdbListeners.push({ref:bizRef, handler:bizH, event:'value'});
+
+  // SHARED: inspections
+  const inspRef = dbRef('inspections');
+  const inspH = inspRef.on('value', snap=>{
+    S.inspections = snap.val() ? Object.values(snap.val()) : [];
+    renderDash();
+  });
+  _rtdbListeners.push({ref:inspRef, handler:inspH, event:'value'});
+
+  // SHARED: violations
+  const violRef = dbRef('violations');
+  const violH = violRef.on('value', snap=>{
+    S.violations = snap.val() ? Object.values(snap.val()) : [];
+    if(document.getElementById('screen-violations')?.classList.contains('active')) renderViols();
+    renderDash();
+  });
+  _rtdbListeners.push({ref:violRef, handler:violH, event:'value'});
+
+  // PER-USER: certifications
+  const certRef = dbRef('certifications/'+user.id);
+  const certH = certRef.on('value', snap=>{
+    S.certifications = snap.val() ? Object.values(snap.val()) : [];
+    if(document.getElementById('screen-certs')?.classList.contains('active')) renderCerts();
+    renderDash();
+  });
+  _rtdbListeners.push({ref:certRef, handler:certH, event:'value'});
+}
+
+function detachRtdbListeners(){
+  _rtdbListeners.forEach(({ref,handler,event})=>{ try{ref.off(event,handler);}catch(e){} });
+  _rtdbListeners=[];
+}
+
 function logout(){
   if(!confirm('Log out of your session?')) return;
-  save();
+  detachRtdbListeners();
   _currentUser=null;
   try{sessionStorage.removeItem('yfi_session');}catch(e){}
   S={businesses:[],inspections:[],violations:[],certifications:[],
@@ -997,69 +1107,62 @@ function saveUser(){
     if(pin&&pin!==pin2){alert('PINs do not match.');return;}
     if(pin&&pin.length<4){alert('PIN must be 4 digits.');return;}
   }
-  const users=getUsers();
   const callerIsAdmin=_currentUser&&isAdmin(_currentUser);
   if(_editUserId){
-    const i=users.findIndex(x=>x.id===_editUserId);
-    if(i>-1){
-      users[i]={...users[i],
+    const existing=_usersCache[_editUserId];
+    if(existing){
+      const updated={...existing,
         name,
         badge:document.getElementById('u-badge').value.trim(),
         email:document.getElementById('u-email').value.trim(),
         phone:document.getElementById('u-phone').value.trim(),
-        role:callerIsAdmin?document.getElementById('u-role').value:users[i].role
+        role:callerIsAdmin?document.getElementById('u-role').value:existing.role
       };
-      if(pin) users[i].pin=pin;
+      if(pin) updated.pin=pin;
+      fbSaveUser(updated);
       if(_currentUser&&_currentUser.id===_editUserId){
-        _currentUser={..._currentUser,...users[i]};
+        _currentUser={..._currentUser,...updated};
         document.getElementById('hdr-user-av').textContent=name.charAt(0).toUpperCase();
         document.getElementById('hdr-user-name').textContent=name.split(' ')[0];
         S.settings.inspectorName=name;
-        S.settings.inspectorEmail=users[i].email||S.settings.inspectorEmail;
-        S.settings.inspectorPhone=users[i].phone||S.settings.inspectorPhone;
-        S.settings.inspectorBadge=users[i].badge||S.settings.inspectorBadge;
-        save();
+        S.settings.inspectorEmail=updated.email||S.settings.inspectorEmail;
+        S.settings.inspectorPhone=updated.phone||S.settings.inspectorPhone;
+        S.settings.inspectorBadge=updated.badge||S.settings.inspectorBadge;
+        saveSettings();
       }
     }
   } else {
-    // New user — if added by admin, auto-approve; otherwise pending
+    const uid='usr_'+Date.now();
     const newUser={
-      id:'usr_'+Date.now(),
+      id:uid,
       name,
       badge:document.getElementById('u-badge').value.trim(),
       email:document.getElementById('u-email').value.trim(),
       phone:document.getElementById('u-phone').value.trim(),
       role:callerIsAdmin?document.getElementById('u-role').value:'Inspector',
       pin,
-      approved:!!callerIsAdmin,  // admin-created = immediately approved
+      approved:!!callerIsAdmin,
       createdAt:new Date().toISOString()
     };
-    users.push(newUser);
+    fbSaveUser(newUser);
     if(!callerIsAdmin){
       alert('✅ Account request submitted!\n\nAn administrator must approve your account before you can log in.');
     }
   }
-  saveUsers(users);
   closeMo('mo-user');
-  renderLoginUsers();
-  renderUserManagement();
+  // renderLoginUsers / renderUserManagement called automatically via /users/ listener
 }
 
 function approveUser(userId){
   if(!_currentUser||!isAdmin(_currentUser)){alert('Admin access required.');return;}
-  const users=getUsers();
-  const u=users.find(x=>x.id===userId);
-  if(u){u.approved=true;saveUsers(users);renderUserManagement();renderLoginUsers();}
+  const u=_usersCache[userId];
+  if(u) dbUpdate('users/'+userId,{approved:true});
 }
 
 function rejectUser(userId){
   if(!_currentUser||!isAdmin(_currentUser)){alert('Admin access required.');return;}
   if(!confirm('Reject and remove this account request?')) return;
-  let users=getUsers();
-  users=users.filter(u=>u.id!==userId);
-  saveUsers(users);
-  renderUserManagement();
-  renderLoginUsers();
+  dbRemove('users/'+userId);
 }
 
 function deleteUser(){
@@ -1067,18 +1170,14 @@ function deleteUser(){
   if(!_currentUser||!isAdmin(_currentUser)){alert('Only administrators can remove users.');return;}
   if(_editUserId===_currentUser.id){alert('You cannot remove your own account.');return;}
   if(!confirm('Remove this inspector? Their inspection data will remain but they will no longer be able to log in.')) return;
-  let users=getUsers();
-  users=users.filter(u=>u.id!==_editUserId);
-  saveUsers(users);
+  dbRemove('users/'+_editUserId);
   closeMo('mo-user');
-  renderLoginUsers();
-  renderUserManagement();
 }
 
 function renderUserManagement(){
   const el=document.getElementById('user-mgmt-list');
   if(!el) return;
-  const users=getUsers();
+  const users=Object.values(_usersCache);
   const callerIsAdmin=_currentUser&&isAdmin(_currentUser);
   if(!users.length){
     el.innerHTML='<div style="color:var(--gray);font-size:13px;padding:8px 0">No inspectors added yet.</div>';
@@ -1132,11 +1231,42 @@ let S = {
 // Occupancies that default to 1-year reinspection cycle
 const HIGH_RISK_OCC = ['A-1','A-2','A-3','A-4','A-5','E','H-1','H-2','H-3','H-4','H-5','I-1','I-2','I-3','I-4','R-1'];
 let _bulkPreviewData = [];
+
+// ─── Firebase write helpers ─────────────────────────────
+// save() is called throughout the app for in-progress inspection draft
+// Shared records are written individually; no bulk state dump needed
 function save(){
-  if(!_currentUser) return;
-  try{localStorage.setItem(userStorageKey(_currentUser.id),JSON.stringify(S));}catch(e){}
+  // Only needs to persist the in-progress inspection draft (curInsp)
+  if(!_currentUser||!S.curInsp) return;
+  dbSet('inspections/'+S.curInsp.id, S.curInsp);
 }
-function load(){/* loading now happens in loginAs() */}
+
+// Write a single business
+function fbSaveBiz(biz){ return dbSet('businesses/'+biz.id, biz); }
+// Write a single inspection
+function fbSaveInsp(insp){ return dbSet('inspections/'+insp.id, insp); }
+// Write a single violation
+function fbSaveViol(v){ return dbSet('violations/'+v.id, v); }
+// Write a single cert (per-user)
+function fbSaveCert(cert){
+  if(!_currentUser) return;
+  return dbSet('certifications/'+_currentUser.id+'/'+cert.id, cert);
+}
+// Remove a cert
+function fbDeleteCert(certId){
+  if(!_currentUser) return;
+  return dbRemove('certifications/'+_currentUser.id+'/'+certId);
+}
+// Remove a violation
+function fbDeleteViol(violId){ return dbRemove('violations/'+violId); }
+// Remove a business and all its related data
+function fbDeleteBiz(bizId){
+  dbRemove('businesses/'+bizId);
+  // Remove associated inspections
+  S.inspections.filter(i=>i.bizId===bizId).forEach(i=>dbRemove('inspections/'+i.id));
+  // Remove associated violations
+  S.violations.filter(v=>v.bizId===bizId).forEach(v=>dbRemove('violations/'+v.id));
+}
 
 // ═══════════════════════════════════════════════════
 //  NAVIGATION
@@ -1905,21 +2035,23 @@ function finalizeInsp(){
   insp.completedDate=new Date().toISOString();
   insp.signature=sig;
   insp.completionNotes=document.getElementById('comp-notes').value;
-  // Push violations to global log
+  // Save completed inspection to Firebase
+  fbSaveInsp(insp);
+  // Push new violations to Firebase (skip duplicates already in S.violations)
   const viols=collectViolations(insp);
   viols.forEach(v=>{
     const exists=S.violations.find(x=>x.itemId===v.id&&x.bizId===insp.bizId&&x.status==='open');
     if(!exists){
-      S.violations.push({
+      const newV={
         id:'viol_'+Date.now()+'_'+Math.random().toString(36).slice(2),
         bizId:insp.bizId, bizName:insp.bizName, bizAddress:insp.bizAddress,
         itemId:v.id, label:v.label, code:v.code, critical:v.critical,
         note:v.note, sectionTitle:v.sectionTitle,
         inspectionId:insp.id, date:insp.completedDate, status:'open'
-      });
+      };
+      fbSaveViol(newV);
     }
   });
-  save();
   closeMo('mo-complete');
   S.curInsp=null; S.curBiz=null;
   document.getElementById('insp-ph').classList.remove('hidden');
@@ -2069,17 +2201,15 @@ function saveBiz(){
     notes:document.getElementById('b-notes').value,
     createdAt:S.editBizId?(S.businesses.find(b=>b.id===S.editBizId)||{}).createdAt:new Date().toISOString()
   };
-  if(S.editBizId){const i=S.businesses.findIndex(b=>b.id===S.editBizId);if(i>-1)S.businesses[i]=biz;}
-  else S.businesses.push(biz);
-  save(); closeMo('mo-biz'); renderBizList();
+  fbSaveBiz(biz);
+  closeMo('mo-biz');
+  // renderBizList will be called by RTDB listener
 }
 
 function delBiz(bizId){
   if(!confirm('Delete this property and all associated data?')) return;
-  S.businesses=S.businesses.filter(b=>b.id!==bizId);
-  S.inspections=S.inspections.filter(i=>i.bizId!==bizId);
-  S.violations=S.violations.filter(v=>v.bizId!==bizId);
-  save(); renderBizList();
+  fbDeleteBiz(bizId);
+  // renderBizList called by RTDB listener
 }
 
 function renderBizList(){
@@ -2145,7 +2275,10 @@ function renderViols(){
 
 function resolveViol(id){
   const v=S.violations.find(x=>x.id===id);
-  if(v&&confirm(`Mark as resolved?\n\n"${v.label}"`)){v.status='resolved';v.resolvedDate=new Date().toISOString();save();renderViols();}
+  if(v&&confirm(`Mark as resolved?\n\n"${v.label}"`)){
+    dbUpdate('violations/'+id,{status:'resolved',resolvedDate:new Date().toISOString()});
+    // renderViols called by listener
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -2207,33 +2340,45 @@ function loadSettings(){
   renderUserManagement();
 }
 function saveSettings(){
+  if(!_currentUser) return;
   S.settings={
-    inspectorName:document.getElementById('s-iname').value.trim(),
-    inspectorEmail:document.getElementById('s-iemail').value.trim(),
-    inspectorPhone:document.getElementById('s-iphone').value.trim(),
-    inspectorBadge:document.getElementById('s-ibadge').value.trim(),
-    deptEmail:document.getElementById('s-demail').value.trim(),
-    deptName:document.getElementById('s-dname').value.trim(),
+    inspectorName:document.getElementById('s-iname')?.value.trim()||S.settings.inspectorName,
+    inspectorEmail:document.getElementById('s-iemail')?.value.trim()||S.settings.inspectorEmail,
+    inspectorPhone:document.getElementById('s-iphone')?.value.trim()||S.settings.inspectorPhone,
+    inspectorBadge:document.getElementById('s-ibadge')?.value.trim()||S.settings.inspectorBadge,
+    deptEmail:document.getElementById('s-demail')?.value.trim()||S.settings.deptEmail,
+    deptName:document.getElementById('s-dname')?.value.trim()||S.settings.deptName,
   };
-  save();
+  // Save per-user settings to Firebase
+  dbSet('settings/'+_currentUser.id, S.settings);
   const el=document.getElementById('s-saved');
-  el.classList.remove('hidden');
-  setTimeout(()=>el.classList.add('hidden'),3000);
+  if(el){el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),3000);}
 }
 
 // ═══════════════════════════════════════════════════
 //  DATA
 // ═══════════════════════════════════════════════════
 function exportData(){
-  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  // Export current in-memory state (live from Firebase)
+  const exportObj={
+    businesses:S.businesses,
+    inspections:S.inspections,
+    violations:S.violations,
+    certifications:S.certifications,
+    exportedAt:new Date().toISOString(),
+    exportedBy:_currentUser?_currentUser.name:'unknown'
+  };
+  const blob=new Blob([JSON.stringify(exportObj,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;a.download=`yorktown_fire_${new Date().toISOString().split('T')[0]}.json`;
   a.click();URL.revokeObjectURL(url);
 }
 function clearData(){
-  if(confirm('⚠️ Delete ALL data permanently?')&&confirm('Confirm: this cannot be undone.')){
-    S.businesses=[];S.inspections=[];S.violations=[];save();renderDash();alert('All data cleared.');
+  if(confirm('⚠️ Delete ALL data permanently? This will delete ALL shared data for ALL users.')&&confirm('Confirm: this cannot be undone.')){
+    Promise.all([dbRemove('businesses'),dbRemove('inspections'),dbRemove('violations')]).then(()=>{
+      renderDash();alert('All shared data cleared.');
+    });
   }
 }
 
@@ -2371,15 +2516,15 @@ function saveCert(){
     notes:document.getElementById('c-notes').value,
     createdAt:_editCertId?(S.certifications.find(c=>c.id===_editCertId)||{}).createdAt:new Date().toISOString()
   };
-  if(_editCertId){const i=S.certifications.findIndex(c=>c.id===_editCertId);if(i>-1)S.certifications[i]=cert;}
-  else S.certifications.push(cert);
-  save(); closeMo('mo-cert'); renderCerts();
+  fbSaveCert(cert);
+  closeMo('mo-cert');
+  // renderCerts called by RTDB listener
 }
 
 function deleteCert(certId){
   if(!confirm('Delete this certification?')) return;
-  S.certifications=S.certifications.filter(c=>c.id!==certId);
-  save(); renderCerts();
+  fbDeleteCert(certId);
+  // renderCerts called by RTDB listener
 }
 
 function certStatus(expires){
@@ -2589,18 +2734,23 @@ function parseCSVRow(row){
 
 function confirmBulkImport(){
   if(!_bulkPreviewData.length){alert('No valid data to import.');return;}
-  // Check for duplicates by name+address
   let skipped=0,added=0;
+  const promises=[];
   _bulkPreviewData.forEach(newBiz=>{
     const dup=S.businesses.find(b=>b.name.toLowerCase()===newBiz.name.toLowerCase()&&b.address.toLowerCase()===newBiz.address.toLowerCase());
     if(dup){skipped++;}
-    else{S.businesses.push(newBiz);added++;}
+    else{
+      promises.push(fbSaveBiz(newBiz));
+      added++;
+    }
   });
-  save();
-  closeMo('mo-bulk');
-  renderBizList();
-  alert(`✅ Import complete!\n\nAdded: ${added} properties\nSkipped (duplicates): ${skipped}`);
-  showScreen('businesses');
+  Promise.all(promises).then(()=>{
+    closeMo('mo-bulk');
+    alert(`✅ Import complete!\n\nAdded: ${added} properties\nSkipped (duplicates): ${skipped}`);
+    showScreen('businesses');
+  }).catch(err=>{
+    alert('Import error: '+err.message);
+  });
 }
 
 function downloadTemplate(){
