@@ -22,6 +22,43 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .hdr-logo p{font-size:10px;opacity:.85}
 #menu-btn{background:rgba(255,255,255,.2);border:none;color:#fff;font-size:20px;width:38px;height:38px;border-radius:8px;cursor:pointer}
 
+/* LOGIN SCREEN */
+#login-screen{display:none;min-height:100vh;background:linear-gradient(160deg,var(--dark-red) 0%,var(--red) 45%,#e74c3c 100%);padding:30px 20px;flex-direction:column;align-items:center;justify-content:center}
+#login-screen.active{display:flex}
+.login-logo{text-align:center;color:#fff;margin-bottom:32px}
+.login-logo .li{font-size:56px;margin-bottom:10px}
+.login-logo h1{font-size:22px;font-weight:800;letter-spacing:.5px}
+.login-logo p{font-size:12px;opacity:.85;margin-top:4px}
+.login-card{background:#fff;border-radius:18px;padding:26px 22px;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,.25)}
+.login-card h2{font-size:16px;font-weight:700;color:#2c3e50;margin-bottom:18px;text-align:center}
+.login-user-list{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
+.lu-btn{display:flex;align-items:center;gap:12px;padding:12px 14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;transition:all .18s;font-family:var(--font);text-align:left;width:100%}
+.lu-btn:hover,.lu-btn:active{border-color:var(--red);background:#fef9f9}
+.lu-avatar{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0}
+.lu-info{flex:1;min-width:0}
+.lu-name{font-weight:700;font-size:14px;color:#2c3e50}
+.lu-role{font-size:11px;color:var(--gray)}
+.login-pin-wrap{display:none;margin-top:6px}
+.login-pin-wrap.active{display:block}
+.pin-dots{display:flex;gap:8px;justify-content:center;margin:12px 0 8px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);background:#fff;transition:all .15s}
+.pin-dot.filled{background:var(--red);border-color:var(--red)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pp-btn{padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;font-size:18px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s;color:#2c3e50}
+.pp-btn:hover,.pp-btn:active{background:var(--red);border-color:var(--red);color:#fff}
+.pp-btn.pp-del{font-size:16px;color:var(--gray)}
+.pp-btn.pp-clear{font-size:12px;color:var(--gray)}
+/* User management */
+.um-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)}
+.um-row:last-child{border-bottom:none}
+.um-avatar{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.um-info{flex:1;min-width:0}
+.um-name{font-weight:700;font-size:13px}
+.um-meta{font-size:11px;color:var(--gray)}
+/* Header user chip */
+.hdr-user{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border-radius:8px;padding:5px 10px;cursor:pointer;border:none;color:#fff;font-family:var(--font);font-size:12px;font-weight:600}
+.hdr-user-av{width:24px;height:24px;border-radius:6px;background:rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+
 /* BOTTOM NAV */
 #bot-nav{position:fixed;bottom:0;left:0;right:0;z-index:999;background:#fff;display:flex;border-top:2px solid var(--border);box-shadow:0 -2px 10px rgba(0,0,0,.09)}
 .nb{flex:1;display:flex;flex-direction:column;align-items:center;padding:7px 3px;gap:2px;background:none;border:none;cursor:pointer;font-size:9px;color:var(--gray);font-family:var(--font)}
@@ -201,13 +238,60 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-logo">
+    <div class="li">🔥</div>
+    <h1>Yorktown Fire Inspection</h1>
+    <p>Town of Yorktown Bureau of Fire Prevention</p>
+  </div>
+  <div class="login-card">
+    <h2>Select Inspector</h2>
+    <div class="login-user-list" id="login-user-list">
+      <!-- populated by JS -->
+    </div>
+    <div class="login-pin-wrap" id="login-pin-wrap">
+      <div style="font-size:12px;font-weight:600;color:#34495e;margin-bottom:4px" id="login-pin-label">Enter PIN for <span id="login-pin-name"></span></div>
+      <div class="pin-dots" id="pin-dots">
+        <div class="pin-dot" id="pd0"></div>
+        <div class="pin-dot" id="pd1"></div>
+        <div class="pin-dot" id="pd2"></div>
+        <div class="pin-dot" id="pd3"></div>
+      </div>
+      <div id="login-pin-error" style="color:var(--red);font-size:11px;text-align:center;min-height:16px;margin-bottom:6px"></div>
+      <div class="pin-pad">
+        <button class="pp-btn" onclick="pinKey('1')">1</button>
+        <button class="pp-btn" onclick="pinKey('2')">2</button>
+        <button class="pp-btn" onclick="pinKey('3')">3</button>
+        <button class="pp-btn" onclick="pinKey('4')">4</button>
+        <button class="pp-btn" onclick="pinKey('5')">5</button>
+        <button class="pp-btn" onclick="pinKey('6')">6</button>
+        <button class="pp-btn" onclick="pinKey('7')">7</button>
+        <button class="pp-btn" onclick="pinKey('8')">8</button>
+        <button class="pp-btn" onclick="pinKey('9')">9</button>
+        <button class="pp-btn pp-clear" onclick="pinClear()">Clear</button>
+        <button class="pp-btn" onclick="pinKey('0')">0</button>
+        <button class="pp-btn pp-del" onclick="pinDel()">⌫</button>
+      </div>
+      <button class="btn btn-gray btn-full" style="margin-top:12px" onclick="cancelPin()">← Back</button>
+    </div>
+    <button class="btn btn-blue btn-full" style="margin-top:10px;font-size:12px" onclick="openAddUser()">＋ Add New Inspector</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-app" style="display:none">
+
 <header id="app-header">
   <div class="hdr">
     <div class="hdr-logo">
       <span style="font-size:26px">🔥</span>
       <div><h1>Yorktown Fire Inspection</h1><p>Town of Yorktown Bureau of Fire Prevention</p></div>
     </div>
-    <button id="menu-btn" onclick="showScreen('settings')">⚙️</button>
+    <button class="hdr-user" id="hdr-user-btn" onclick="showScreen('settings')">
+      <div class="hdr-user-av" id="hdr-user-av">?</div>
+      <span id="hdr-user-name">Inspector</span>
+    </button>
   </div>
 </header>
 
@@ -293,8 +377,37 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 
 <div id="screen-settings" class="screen">
   <h2 style="font-size:17px;font-weight:800;margin-bottom:14px">⚙️ Settings</h2>
+
+  <!-- Current user card with logout -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="ch red">👤 Logged In As</div>
+    <div class="cb">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0" id="set-user-av">?</div>
+        <div>
+          <div style="font-weight:700;font-size:15px" id="set-user-name">—</div>
+          <div style="font-size:11px;color:var(--gray)" id="set-user-role">—</div>
+          <div style="font-size:11px;color:var(--gray)" id="set-user-badge"></div>
+        </div>
+      </div>
+      <div class="flex gap8">
+        <button class="btn btn-blue" style="flex:1" onclick="editUser(_currentUser?.id)">✏️ Edit My Profile</button>
+        <button class="btn btn-red" style="flex:1" onclick="logout()">🔓 Log Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inspector Management -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="ch blue" style="cursor:pointer" onclick="toggleCard('um-card')">👥 Inspector Accounts <span style="font-size:12px;font-weight:400">▾</span></div>
+    <div class="cb" id="um-card">
+      <div id="user-mgmt-list"></div>
+      <button class="btn btn-blue btn-full mt8" onclick="openAddUser()">＋ Add Inspector</button>
+    </div>
+  </div>
+
   <div class="card">
-    <div class="ch blue">👤 Inspector Information</div>
+    <div class="ch blue">👤 My Inspector Settings</div>
     <div class="cb">
       <div class="fg"><label>Inspector Name</label><input type="text" id="s-iname" placeholder="e.g. John Smith"></div>
       <div class="fg"><label>Inspector Email</label><input type="email" id="s-iemail" placeholder="inspector@yorktownny.gov"></div>
@@ -613,7 +726,305 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
   </div>
 </div>
 
+<!-- MODAL: Add/Edit User -->
+<div class="mo" id="mo-user">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title" id="user-mo-title">👤 Add Inspector</div>
+    <div class="fg"><label>Full Name *</label><input type="text" id="u-name" placeholder="e.g. John Smith"></div>
+    <div class="fg"><label>Badge / ID #</label><input type="text" id="u-badge" placeholder="e.g. FI-204"></div>
+    <div class="fg"><label>Email</label><input type="email" id="u-email" placeholder="inspector@yorktownny.gov"></div>
+    <div class="fg"><label>Phone</label><input type="tel" id="u-phone" placeholder="(914) 555-1234"></div>
+    <div class="fg"><label>Role</label>
+      <select id="u-role">
+        <option value="Inspector">Fire Inspector</option>
+        <option value="Senior Inspector">Senior Fire Inspector</option>
+        <option value="Chief Inspector">Chief Fire Inspector</option>
+        <option value="Admin">Administrator</option>
+      </select>
+    </div>
+    <div class="fg"><label>4-Digit PIN *</label>
+      <input type="password" id="u-pin" maxlength="4" placeholder="4 digits" inputmode="numeric" pattern="[0-9]{4}">
+      <div style="font-size:10px;color:var(--gray);margin-top:3px">Used to log in on the device. Min 4 digits.</div>
+    </div>
+    <div class="fg" id="u-pin2-wrap"><label>Confirm PIN *</label>
+      <input type="password" id="u-pin2" maxlength="4" placeholder="Re-enter PIN" inputmode="numeric" pattern="[0-9]{4}">
+    </div>
+    <div id="u-admin-badge" class="hidden">
+      <div class="al al-blue" style="margin-bottom:12px"><span>🛡️</span><div>Admin accounts can manage users and system settings.</div></div>
+    </div>
+    <div class="flex gap8">
+      <button class="btn btn-gray" style="flex:1" onclick="closeMo('mo-user')">Cancel</button>
+      <button class="btn btn-red" style="flex:1" onclick="saveUser()">Save</button>
+    </div>
+    <div id="u-del-wrap" class="hidden" style="margin-top:10px">
+      <button class="btn btn-gray btn-full" onclick="deleteUser()">🗑️ Remove Inspector</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- end #main-app -->
+
 <script>
+// ═══════════════════════════════════════════════════
+//  MULTI-USER AUTH
+// ═══════════════════════════════════════════════════
+// Users stored in localStorage key 'yfi_users' as array of {id,name,badge,email,phone,role,pin}
+// Each user's inspection data stored under 'yfi_data_<userId>'
+// Active session stored in sessionStorage 'yfi_session'
+
+let _currentUser = null;  // {id, name, badge, email, phone, role}
+let _pendingLoginUser = null; // user selected, waiting for PIN
+let _pinEntry = '';
+
+function getUsers(){
+  try{const d=localStorage.getItem('yfi_users');return d?JSON.parse(d):[];}catch(e){return [];}
+}
+function saveUsers(users){
+  try{localStorage.setItem('yfi_users',JSON.stringify(users));}catch(e){}
+}
+function userStorageKey(userId){return 'yfi_data_'+userId;}
+
+function bootApp(){
+  // Check for active session
+  try{
+    const sess=sessionStorage.getItem('yfi_session');
+    if(sess){
+      const u=JSON.parse(sess);
+      const users=getUsers();
+      const found=users.find(x=>x.id===u.id);
+      if(found){loginAs(found);return;}
+    }
+  }catch(e){}
+  showLoginScreen();
+}
+
+function showLoginScreen(){
+  document.getElementById('login-screen').classList.add('active');
+  document.getElementById('main-app').style.display='none';
+  _pendingLoginUser=null; _pinEntry='';
+  renderLoginUsers();
+  document.getElementById('login-pin-wrap').classList.remove('active');
+  document.getElementById('login-user-list').style.display='flex';
+  document.getElementById('login-user-list').style.flexDirection='column';
+}
+
+function renderLoginUsers(){
+  const users=getUsers();
+  const list=document.getElementById('login-user-list');
+  if(!users.length){
+    list.innerHTML=`<div style="text-align:center;padding:14px;color:var(--gray);font-size:13px">No inspectors added yet.<br>Tap <strong>Add New Inspector</strong> below.</div>`;
+    return;
+  }
+  list.innerHTML=users.map(u=>`
+    <button class="lu-btn" onclick="selectLoginUser('${u.id}')">
+      <div class="lu-avatar">${u.name.charAt(0).toUpperCase()}</div>
+      <div class="lu-info">
+        <div class="lu-name">${u.name}</div>
+        <div class="lu-role">${u.role||'Fire Inspector'}${u.badge?' · Badge '+u.badge:''}</div>
+      </div>
+      <span style="color:var(--gray);font-size:18px">›</span>
+    </button>
+  `).join('');
+}
+
+function selectLoginUser(userId){
+  const users=getUsers();
+  const u=users.find(x=>x.id===userId);
+  if(!u) return;
+  _pendingLoginUser=u;
+  _pinEntry='';
+  updatePinDots();
+  document.getElementById('login-pin-name').textContent=u.name;
+  document.getElementById('login-pin-error').textContent='';
+  document.getElementById('login-pin-wrap').classList.add('active');
+  document.getElementById('login-user-list').style.display='none';
+}
+
+function cancelPin(){
+  _pendingLoginUser=null; _pinEntry='';
+  document.getElementById('login-pin-wrap').classList.remove('active');
+  document.getElementById('login-user-list').style.display='flex';
+}
+
+function pinKey(d){
+  if(_pinEntry.length>=4) return;
+  _pinEntry+=d;
+  updatePinDots();
+  if(_pinEntry.length===4) setTimeout(checkPin,120);
+}
+function pinDel(){_pinEntry=_pinEntry.slice(0,-1);updatePinDots();}
+function pinClear(){_pinEntry='';updatePinDots();}
+
+function updatePinDots(){
+  for(let i=0;i<4;i++){
+    const dot=document.getElementById('pd'+i);
+    if(dot) dot.classList.toggle('filled',i<_pinEntry.length);
+  }
+}
+
+function checkPin(){
+  if(!_pendingLoginUser) return;
+  if(_pinEntry===_pendingLoginUser.pin){
+    document.getElementById('login-pin-error').textContent='';
+    loginAs(_pendingLoginUser);
+  } else {
+    document.getElementById('login-pin-error').textContent='Incorrect PIN. Try again.';
+    _pinEntry='';
+    updatePinDots();
+  }
+}
+
+function loginAs(user){
+  _currentUser=user;
+  try{sessionStorage.setItem('yfi_session',JSON.stringify({id:user.id}));}catch(e){}
+  // Load this user's data
+  try{
+    const d=localStorage.getItem(userStorageKey(user.id));
+    if(d){S={...S,...JSON.parse(d)};}
+    else{S={businesses:[],inspections:[],violations:[],certifications:[],
+             settings:{inspectorName:user.name,inspectorEmail:user.email||'',inspectorPhone:user.phone||'',
+                       inspectorBadge:user.badge||'',deptEmail:'building@yorktownny.gov',
+                       deptName:'Town of Yorktown Building Department'},
+             curBiz:null,curInsp:null,editBizId:null,editCertId:null};}
+  }catch(e){}
+  // Update header
+  document.getElementById('hdr-user-av').textContent=user.name.charAt(0).toUpperCase();
+  document.getElementById('hdr-user-name').textContent=user.name.split(' ')[0];
+  // Show app
+  document.getElementById('login-screen').classList.remove('active');
+  document.getElementById('main-app').style.display='block';
+  showScreen('dashboard');
+}
+
+function logout(){
+  if(!confirm('Log out of your session?')) return;
+  save(); // save current user data first
+  _currentUser=null;
+  try{sessionStorage.removeItem('yfi_session');}catch(e){}
+  // Reset state
+  S={businesses:[],inspections:[],violations:[],certifications:[],
+     settings:{inspectorName:'',inspectorEmail:'',inspectorPhone:'',inspectorBadge:'',
+               deptEmail:'building@yorktownny.gov',deptName:'Town of Yorktown Building Department'},
+     curBiz:null,curInsp:null,editBizId:null,editCertId:null};
+  showLoginScreen();
+}
+
+// User management
+let _editUserId=null;
+function openAddUser(){
+  _editUserId=null;
+  document.getElementById('user-mo-title').textContent='👤 Add Inspector';
+  ['u-name','u-badge','u-email','u-phone','u-pin','u-pin2'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  document.getElementById('u-role').value='Inspector';
+  document.getElementById('u-del-wrap').classList.add('hidden');
+  document.getElementById('u-pin2-wrap').classList.remove('hidden');
+  openMo('mo-user');
+}
+function editUser(userId){
+  const users=getUsers();
+  const u=users.find(x=>x.id===userId);
+  if(!u) return;
+  _editUserId=userId;
+  document.getElementById('user-mo-title').textContent='✏️ Edit Inspector';
+  document.getElementById('u-name').value=u.name||'';
+  document.getElementById('u-badge').value=u.badge||'';
+  document.getElementById('u-email').value=u.email||'';
+  document.getElementById('u-phone').value=u.phone||'';
+  document.getElementById('u-role').value=u.role||'Inspector';
+  document.getElementById('u-pin').value='';
+  document.getElementById('u-pin2').value='';
+  document.getElementById('u-pin').placeholder='Leave blank to keep current PIN';
+  document.getElementById('u-del-wrap').classList.remove('hidden');
+  document.getElementById('u-pin2-wrap').classList.remove('hidden');
+  openMo('mo-user');
+}
+function saveUser(){
+  const name=document.getElementById('u-name').value.trim();
+  const pin=document.getElementById('u-pin').value.trim();
+  const pin2=document.getElementById('u-pin2').value.trim();
+  if(!name){alert('Name is required.');return;}
+  if(!_editUserId){
+    // New user — PIN required
+    if(!pin||pin.length<4){alert('Please enter a 4-digit PIN.');return;}
+    if(pin!==pin2){alert('PINs do not match.');return;}
+  } else {
+    // Edit — PIN only required if changing
+    if(pin && pin!==pin2){alert('PINs do not match.');return;}
+    if(pin && pin.length<4){alert('PIN must be 4 digits.');return;}
+  }
+  const users=getUsers();
+  if(_editUserId){
+    const i=users.findIndex(x=>x.id===_editUserId);
+    if(i>-1){
+      users[i]={...users[i],
+        name,badge:document.getElementById('u-badge').value.trim(),
+        email:document.getElementById('u-email').value.trim(),
+        phone:document.getElementById('u-phone').value.trim(),
+        role:document.getElementById('u-role').value
+      };
+      if(pin) users[i].pin=pin;
+      // If editing current user, update header
+      if(_currentUser&&_currentUser.id===_editUserId){
+        _currentUser={..._currentUser,...users[i]};
+        document.getElementById('hdr-user-av').textContent=name.charAt(0).toUpperCase();
+        document.getElementById('hdr-user-name').textContent=name.split(' ')[0];
+        // Also update settings
+        S.settings.inspectorName=name;
+        S.settings.inspectorEmail=users[i].email||S.settings.inspectorEmail;
+        S.settings.inspectorPhone=users[i].phone||S.settings.inspectorPhone;
+        S.settings.inspectorBadge=users[i].badge||S.settings.inspectorBadge;
+        save();
+      }
+    }
+  } else {
+    users.push({
+      id:'usr_'+Date.now(),
+      name,badge:document.getElementById('u-badge').value.trim(),
+      email:document.getElementById('u-email').value.trim(),
+      phone:document.getElementById('u-phone').value.trim(),
+      role:document.getElementById('u-role').value,
+      pin
+    });
+  }
+  saveUsers(users);
+  closeMo('mo-user');
+  // Refresh user list if on login screen, or user management in settings
+  renderLoginUsers();
+  renderUserManagement();
+}
+function deleteUser(){
+  if(!_editUserId) return;
+  if(!confirm('Remove this inspector? Their inspection data will remain but they will no longer be able to log in.')) return;
+  let users=getUsers();
+  users=users.filter(u=>u.id!==_editUserId);
+  saveUsers(users);
+  closeMo('mo-user');
+  renderLoginUsers();
+  renderUserManagement();
+}
+function renderUserManagement(){
+  const el=document.getElementById('user-mgmt-list');
+  if(!el) return;
+  const users=getUsers();
+  if(!users.length){
+    el.innerHTML='<div style="color:var(--gray);font-size:13px;padding:8px 0">No inspectors added yet.</div>';
+    return;
+  }
+  el.innerHTML=users.map(u=>`
+    <div class="um-row">
+      <div class="um-avatar">${u.name.charAt(0).toUpperCase()}</div>
+      <div class="um-info">
+        <div class="um-name">${u.name}</div>
+        <div class="um-meta">${u.role||'Inspector'}${u.badge?' · '+u.badge:''}</div>
+      </div>
+      <button class="btn btn-sm btn-blue" onclick="editUser('${u.id}')">✏️</button>
+    </div>
+  `).join('');
+}
+
 // ═══════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════
@@ -628,8 +1039,11 @@ let S = {
 // Occupancies that default to 1-year reinspection cycle
 const HIGH_RISK_OCC = ['A-1','A-2','A-3','A-4','A-5','E','H-1','H-2','H-3','H-4','H-5','I-1','I-2','I-3','I-4','R-1'];
 let _bulkPreviewData = [];
-function save(){try{localStorage.setItem('yfi2',JSON.stringify(S))}catch(e){}}
-function load(){try{const d=localStorage.getItem('yfi2');if(d)S={...S,...JSON.parse(d)}}catch(e){}}
+function save(){
+  if(!_currentUser) return;
+  try{localStorage.setItem(userStorageKey(_currentUser.id),JSON.stringify(S));}catch(e){}
+}
+function load(){/* loading now happens in loginAs() */}
 
 // ═══════════════════════════════════════════════════
 //  NAVIGATION
@@ -1681,6 +2095,7 @@ function renderDash(){
 // ═══════════════════════════════════════════════════
 //  SETTINGS
 // ═══════════════════════════════════════════════════
+function toggleCard(id){const el=document.getElementById(id);if(el)el.style.display=el.style.display==='none'?'block':'none';}
 function loadSettings(){
   const s=S.settings;
   document.getElementById('s-iname').value=s.inspectorName||'';
@@ -1689,6 +2104,14 @@ function loadSettings(){
   document.getElementById('s-ibadge').value=s.inspectorBadge||'';
   document.getElementById('s-demail').value=s.deptEmail||'';
   document.getElementById('s-dname').value=s.deptName||'';
+  // Populate current user card
+  if(_currentUser){
+    document.getElementById('set-user-av').textContent=_currentUser.name.charAt(0).toUpperCase();
+    document.getElementById('set-user-name').textContent=_currentUser.name;
+    document.getElementById('set-user-role').textContent=_currentUser.role||'Fire Inspector';
+    document.getElementById('set-user-badge').textContent=_currentUser.badge?'Badge: '+_currentUser.badge:'';
+  }
+  renderUserManagement();
 }
 function saveSettings(){
   S.settings={
@@ -2007,6 +2430,114 @@ function parseBulkCSV(csvText){
       city:row.city||'Yorktown Heights',
       zip:row.zip||'10598',
       occupancy:occ,
+      contact:row.contact.trim(),
+      contactEmail:row.contactemail||row.contactEmail||'',
+      contactPhone:row.contactphone||row.contactPhone||'',
+      sprinkler:row.sprinkler||'none',
+      standpipe:row.standpipe||'none',
+      stories:row.stories||'1',
+      constType:row.consttype||row.constType||'',
+      liion:row.liion||'none',
+      reinspCycle:cycle,
+      notes:row.notes||'',
+      createdAt:new Date().toISOString()
+    });
+  }
+
+  _bulkPreviewData=rows;
+  const preview=document.getElementById('bulk-preview');
+  preview.classList.remove('hidden');
+
+  let html=`<div class="al al-${errors.length?'orange':'green'}">
+    <div><strong>${rows.length} properties</strong> ready to import${errors.length?` · <strong>${errors.length} errors</strong> skipped`:' with no errors'}.</div>
+  </div>`;
+
+  if(errors.length>0){
+    html+=`<div style="background:#fef9f9;border-radius:8px;padding:10px;font-size:11px;color:var(--dark-red);margin-bottom:10px"><strong>Errors:</strong><br>${errors.join('<br>')}</div>`;
+  }
+
+  if(rows.length>0){
+    html+=`<div style="font-size:12px;font-weight:700;margin-bottom:6px">Preview (first 5 rows):</div>`;
+    html+=`<div class="card">`;
+    rows.slice(0,5).forEach(r=>{
+      html+=`<div class="bi" style="cursor:default">
+        <div class="bico" style="width:34px;height:34px;font-size:16px">${OI[r.occupancy]||'🏢'}</div>
+        <div class="binfo">
+          <div class="bname">${r.name}</div>
+          <div class="baddr">${r.address}, ${r.city}</div>
+          <div class="bmeta"><span class="badge bdb">${OL[r.occupancy]}</span><span class="badge bdgr">${r.reinspCycle}-yr cycle</span></div>
+        </div>
+      </div>`;
+    });
+    if(rows.length>5) html+=`<div style="padding:8px 13px;font-size:11px;color:var(--gray)">+${rows.length-5} more rows…</div>`;
+    html+=`</div>`;
+  }
+
+  preview.innerHTML=html;
+  const importBtn=document.getElementById('btn-bulk-import');
+  if(rows.length>0){
+    importBtn.classList.remove('hidden');
+    importBtn.textContent=`📥 Import ${rows.length} Properties`;
+  }
+}
+
+function parseCSVRow(row){
+  // Handles quoted fields with commas inside
+  const result=[];
+  let cur='',inQuote=false;
+  for(let i=0;i<row.length;i++){
+    if(row[i]==='"'){inQuote=!inQuote;}
+    else if(row[i]===','&&!inQuote){result.push(cur);cur='';}
+    else{cur+=row[i];}
+  }
+  result.push(cur);
+  return result;
+}
+
+function confirmBulkImport(){
+  if(!_bulkPreviewData.length){alert('No valid data to import.');return;}
+  // Check for duplicates by name+address
+  let skipped=0,added=0;
+  _bulkPreviewData.forEach(newBiz=>{
+    const dup=S.businesses.find(b=>b.name.toLowerCase()===newBiz.name.toLowerCase()&&b.address.toLowerCase()===newBiz.address.toLowerCase());
+    if(dup){skipped++;}
+    else{S.businesses.push(newBiz);added++;}
+  });
+  save();
+  closeMo('mo-bulk');
+  renderBizList();
+  alert(`✅ Import complete!\n\nAdded: ${added} properties\nSkipped (duplicates): ${skipped}`);
+  showScreen('businesses');
+}
+
+function downloadTemplate(){
+  const header='name,address,city,zip,occupancy,contact,contactEmail,contactPhone,sprinkler,standpipe,stories,constType,liion,reinspCycle,notes';
+  const example1='"Yorktown Diner","123 Main St","Yorktown Heights","10598","A-2","Jane Doe","owner@diner.com","9145551234","13","none","1","V-A","none","1","Restaurant with full kitchen"';
+  const example2='"ABC Storage","456 Commerce Blvd","Yorktown Heights","10598","S-1","John Smith","john@abcstorage.com","9145555678","none","none","1","III-A","none","3","Moderate hazard storage"';
+  const csv=[header,example1,example2].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='yorktown_fire_properties_template.csv';
+  a.click();URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════
+//  MODAL HELPERS
+// ═══════════════════════════════════════════════════
+function openMo(id){document.getElementById(id).classList.add('open');}
+function closeMo(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.mo').forEach(o=>{
+  o.addEventListener('click',function(e){if(e.target===this)closeMo(this.id);});
+});
+
+// ═══════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════
+bootApp();
+</script>
+</body>
+</html>
       contact:row.contact.trim(),
       contactEmail:row.contactemail||row.contactEmail||'',
       contactPhone:row.contactphone||row.contactPhone||'',
