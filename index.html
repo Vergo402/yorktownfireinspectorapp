@@ -2464,6 +2464,7 @@ function renderBizList(){
     const last=S.inspections.filter(i=>i.bizId===biz.id&&i.status==='completed').sort((a,b)=>new Date(b.completedDate)-new Date(a.completedDate))[0];
     const ov=S.violations.filter(v=>v.bizId===biz.id&&v.status==='open').length;
     const inspCount=S.inspections.filter(i=>i.bizId===biz.id&&i.status==='completed').length;
+    const hasDraft=S.inspections.some(i=>i.bizId===biz.id&&i.status==='draft');
     return `
       <div class="bi" onclick="startInsp('${biz.id}')">
         <div class="bico">${OI[biz.occupancy]||'🏢'}</div>
@@ -2479,9 +2480,11 @@ function renderBizList(){
             ${ov>0?`<span class="badge bdr">⚠️ ${ov}</span>`:'<span class="badge bdg">✓ OK</span>'}
             ${last?`<span class="badge bdgr">${new Date(last.completedDate).toLocaleDateString()}</span>`:'<span class="badge bdy">Never inspected</span>'}
             ${inspCount>0?`<span class="badge bdp" style="cursor:pointer" onclick="event.stopPropagation();openInspHistory('${biz.id}')">📋 ${inspCount} Inspections</span>`:''}
+            ${hasDraft?'<span class="badge bdo">⏳ Draft in Progress</span>':''}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+          ${hasDraft?`<button class="btn btn-sm btn-orange" onclick="event.stopPropagation();startInsp('${biz.id}')">▶️ Resume</button>`:''}
           <button class="btn btn-sm btn-blue" onclick="event.stopPropagation();editBiz('${biz.id}')">✏️</button>
           <button class="btn btn-sm btn-orange" onclick="event.stopPropagation();archiveBiz('${biz.id}')" title="Archive property">📦</button>
           <button class="btn btn-sm btn-gray" onclick="event.stopPropagation();delBiz('${biz.id}')" title="Delete permanently">🗑️</button>
@@ -3104,7 +3107,10 @@ function openInspHistory(bizId){
           <div class="ih-date">Draft – started ${new Date(i.date).toLocaleDateString()}</div>
           <div class="ih-meta">Inspector: ${i.signature||'In progress'}</div>
         </div>
-        <button class="btn btn-sm btn-gray" onclick="confirmDeleteInsp('${i.id}')" title="Delete draft">🗑️ Delete</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-orange" onclick="closeMo('mo-insp-hist');startInsp('${i.bizId}')" title="Resume draft">▶️ Resume</button>
+          <button class="btn btn-sm btn-gray" onclick="confirmDeleteInsp('${i.id}')" title="Delete draft">🗑️</button>
+        </div>
       </div>`).join('');
     html+=`<div class="divider"></div>`;
   }
