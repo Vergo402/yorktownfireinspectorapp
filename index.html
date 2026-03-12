@@ -329,6 +329,7 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
 <!-- SCREENS -->
 <div id="screen-dashboard" class="screen active">
   <div class="sg" id="dash-stats"></div>
+  <div id="dash-alerts"></div>
   <div class="card"><div class="ch red">📋 Recent Inspections</div><div id="dash-recent"></div></div>
   <div class="card"><div class="ch orange">⚠️ Open Violations</div><div id="dash-violations"></div></div>
   <div class="al al-blue"><span>ℹ️</span><div><strong>Code Basis:</strong> NYS Uniform Fire Prevention &amp; Building Code (19 NYCRR Part 1225); Town of Yorktown Ch.130; 2020 IBC; NFPA 1, 72, 13, 10, 101; IFC 2021.</div></div>
@@ -371,6 +372,9 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
     <div class="flex gap8 fwrap mt12">
       <button class="btn btn-green flex-1" style="flex:1" onclick="completeInsp()">✅ Complete Inspection</button>
       <button class="btn btn-orange" style="flex:1" onclick="saveDraft()">💾 Save Draft</button>
+    </div>
+    <div class="mt8" style="text-align:center">
+      <button class="btn btn-gray btn-sm" onclick="discardDraft()" style="font-size:12px;opacity:0.7">🗑️ Discard Draft &amp; Start Fresh</button>
     </div>
   </div>
 </div>
@@ -1881,29 +1885,10 @@ function startInsp(bizId) {
   S.curBiz = biz;
   const draft = S.inspections.find(i=>i.bizId===bizId && i.status==='draft');
   if (draft) {
-    // Always resume the existing draft; offer option to start fresh
-    const choice = confirm(`Resume draft inspection for "${biz.name}"?\n\nTap OK to resume, Cancel to start a brand-new inspection (the draft will be deleted).`);
-    if (choice) {
-      S.curInsp = draft;
-      // Rebuild sections from current checklist data but preserve all answers/notes/photos
-      S.curInsp.sections = sectionsForOcc(biz.occupancy, biz.standpipe);
-      // Ensure photo map exists
-      if(!S.curInsp.itemPhotos) S.curInsp.itemPhotos = {};
-    } else {
-      // Delete the old draft, start fresh
-      fbDeleteInsp(draft.id);
-      S.curInsp = {
-        id:'insp_'+Date.now(),
-        bizId:biz.id, bizName:biz.name,
-        bizAddress:biz.address+', '+biz.city+', NY '+biz.zip,
-        occupancy:biz.occupancy, date:new Date().toISOString(),
-        status:'draft',
-        secAnswers:{}, itemAnswers:{}, itemNotes:{}, itemPhotos:{},
-        sections: sectionsForOcc(biz.occupancy, biz.standpipe)
-      };
-      S.inspections.push(S.curInsp);
-      save();
-    }
+    // Always resume the existing draft automatically — no confirm() dialog
+    S.curInsp = draft;
+    S.curInsp.sections = sectionsForOcc(biz.occupancy, biz.standpipe);
+    if(!S.curInsp.itemPhotos) S.curInsp.itemPhotos = {};
   } else {
     S.curInsp = {
       id:'insp_'+Date.now(),
@@ -2605,6 +2590,14 @@ function renderDash(){
   document.getElementById('dash-violations').innerHTML=!rv.length
     ?'<div class="es" style="padding:18px"><div class="ei" style="font-size:32px">✅</div><p>No open violations.</p></div>'
     :rv.map(v=>`<div class="vi" style="border-left-color:${v.critical?'var(--red)':'var(--orange)'}"><div class="vi-hdr"><div><div class="vi-title">${v.critical?'★ ':''}${v.label}</div><div class="vi-detail">🏢 ${v.bizName} · ${new Date(v.date).toLocaleDateString()}</div></div>${v.critical?'<span class="badge bdr">★</span>':'<span class="badge bdo">STD</span>'}</div></div>`).join('');
+  // Draft alert
+  const _drafts=S.inspections.filter(i=>i.status==='draft');
+  const _draftAlert=document.getElementById('dash-alerts');
+  if(_draftAlert){
+    _draftAlert.innerHTML=_drafts.length
+      ?`<div class="al al-orange">📋 <div><strong>${_drafts.length} draft inspection${_drafts.length>1?'s':''} in progress.</strong> <button class="btn btn-xs btn-orange no-print" style="padding:4px 10px;font-size:12px" onclick="resumeFirstDraft()">Resume</button></div></div>`
+      :'';
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -3167,6 +3160,26 @@ document.addEventListener('click',function(e){
 // ═══════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════
+// ── Draft helpers ───────────────────────────────────────────────
+function resumeFirstDraft(){
+  const draft=S.inspections.find(i=>i.status==='draft');
+  if(!draft){ showScreen('businesses'); return; }
+  const biz=S.businesses.find(b=>b.id===draft.bizId);
+  if(!biz){ showScreen('businesses'); return; }
+  startInsp(biz.id);
+}
+
+function discardDraft(){
+  if(!S.curInsp||!S.curBiz) return;
+  if(!confirm('Discard this draft and start a brand-new inspection?
+
+This cannot be undone.')) return;
+  fbDeleteInsp(S.curInsp.id);
+  S.curInsp=null;
+  // Start fresh
+  startInsp(S.curBiz.id);
+}
+
 bootApp();
 </script>
 </body>
