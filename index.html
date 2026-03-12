@@ -3171,13 +3171,11 @@ function resumeFirstDraft(){
 
 function discardDraft(){
   if(!S.curInsp||!S.curBiz) return;
-  if(!confirm('Discard this draft and start a brand-new inspection?
-
-This cannot be undone.')) return;
+  if(!confirm('Discard this draft and start a brand-new inspection? This cannot be undone.')) return;
+  const bizId=S.curBiz.id;
   fbDeleteInsp(S.curInsp.id);
   S.curInsp=null;
-  // Start fresh
-  startInsp(S.curBiz.id);
+  startInsp(bizId);
 }
 
 bootApp();
