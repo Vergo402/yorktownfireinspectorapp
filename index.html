@@ -1069,7 +1069,9 @@ function attachRtdbListeners(user){
   // SHARED: inspections
   const inspRef = dbRef('inspections');
   const inspH = inspRef.on('value', snap=>{
-    S.inspections = snap.val() ? Object.values(snap.val()) : [];
+    // Strip any stored sections — they are always rebuilt from sectionsForOcc()
+    // Firebase serializes JS arrays as objects with numeric keys, breaking forEach
+    S.inspections = snap.val() ? Object.values(snap.val()).map(i=>{ const {sections,...rest}=i; return rest; }) : [];
     renderDash();
   });
   _rtdbListeners.push({ref:inspRef, handler:inspH, event:'value'});
@@ -1308,13 +1310,16 @@ let _bulkPreviewData = [];
 function save(){
   // Only needs to persist the in-progress inspection draft (curInsp)
   if(!_currentUser||!S.curInsp) return;
-  dbSet('inspections/'+S.curInsp.id, S.curInsp);
+  // Strip sections before saving — it is derived data rebuilt from sectionsForOcc()
+  // Storing it causes Firebase to convert arrays to objects, breaking forEach on load
+  const {sections, ...inspToSave} = S.curInsp;
+  dbSet('inspections/'+S.curInsp.id, inspToSave);
 }
 
 // Write a single business
 function fbSaveBiz(biz){ return dbSet('businesses/'+biz.id, biz); }
-// Write a single inspection
-function fbSaveInsp(insp){ return dbSet('inspections/'+insp.id, insp); }
+// Write a single inspection (strip sections — rebuilt from sectionsForOcc on load)
+function fbSaveInsp(insp){ const {sections, ...i} = insp; return dbSet('inspections/'+i.id, i); }
 // Write a single violation
 function fbSaveViol(v){ return dbSet('violations/'+v.id, v); }
 // Write a single cert (per-user)
@@ -1887,8 +1892,13 @@ function startInsp(bizId) {
   if (draft) {
     // Always resume the existing draft automatically — no confirm() dialog
     S.curInsp = draft;
+    // Always rebuild sections from live data — never trust what came from Firebase
+    // (Firebase converts JS arrays to objects with numeric keys, breaking forEach)
     S.curInsp.sections = sectionsForOcc(biz.occupancy, biz.standpipe);
     if(!S.curInsp.itemPhotos) S.curInsp.itemPhotos = {};
+    if(!S.curInsp.secAnswers) S.curInsp.secAnswers = {};
+    if(!S.curInsp.itemAnswers) S.curInsp.itemAnswers = {};
+    if(!S.curInsp.itemNotes) S.curInsp.itemNotes = {};
   } else {
     S.curInsp = {
       id:'insp_'+Date.now(),
