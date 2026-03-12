@@ -790,6 +790,31 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
 
 </div><!-- end #main-app -->
 
+<!-- MODAL: View Past Inspection -->
+<div class="mo" id="mo-view-insp">
+  <div class="md" style="max-height:92vh">
+    <div class="md-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="md-title" style="margin-bottom:0" id="view-insp-title">📋 Inspection Detail</div>
+      <button class="btn btn-sm btn-gray" onclick="closeMo('mo-view-insp')">✕ Close</button>
+    </div>
+    <div id="view-insp-body"></div>
+  </div>
+</div>
+
+<!-- MODAL: Confirm Delete (mobile-safe, replaces confirm()) -->
+<div class="mo" id="mo-confirm-delete">
+  <div class="md">
+    <div class="md-handle"></div>
+    <div class="md-title" id="mo-confirm-title">⚠️ Confirm Delete</div>
+    <div id="mo-confirm-msg" style="font-size:14px;color:#444;margin-bottom:18px;line-height:1.5"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-gray flex-1" onclick="closeMo('mo-confirm-delete')">Cancel</button>
+      <button class="btn btn-red flex-1" id="mo-confirm-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Add/Edit User — outside #main-app so accessible from login screen too -->
 <div class="mo" id="mo-user">
   <div class="md">
@@ -3119,7 +3144,7 @@ function openInspHistory(bizId){
         </div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-sm btn-orange" onclick="closeMo('mo-insp-hist');startInsp('${i.bizId}')" title="Resume draft">▶️ Resume</button>
-          <button class="btn btn-sm btn-gray" onclick="confirmDeleteInsp('${i.id}')" title="Delete draft">🗑️</button>
+          <button class="btn btn-sm btn-gray" onclick="mobileConfirmDelete('${i.id}')" title="Delete draft">🗑️</button>
         </div>
       </div>`).join('');
     html+=`<div class="divider"></div>`;
@@ -3139,7 +3164,10 @@ function openInspHistory(bizId){
               ${violCount>0?` · <span style="color:var(--red)">⚠️ ${violCount} violation(s)${openV>0?' ('+openV+' open)':' (all resolved)'}</span>`:' · <span style="color:var(--green)">✓ Clean</span>'}
             </div>
           </div>
-          <button class="btn btn-sm btn-gray" onclick="confirmDeleteInsp('${i.id}')" title="Delete inspection record" style="flex-shrink:0">🗑️</button>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-sm btn-blue" onclick="viewPastInsp('${i.id}')" title="View full inspection">👁️ View</button>
+            <button class="btn btn-sm btn-gray" onclick="mobileConfirmDelete('${i.id}')" title="Delete">🗑️</button>
+          </div>
         </div>`;
     }).join('');
   }
@@ -3176,6 +3204,144 @@ document.addEventListener('click',function(e){
 // ═══════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  MOBILE-SAFE CONFIRM DELETE (replaces browser confirm())
+// ═══════════════════════════════════════════════════
+function mobileConfirmDelete(inspId){
+  const insp=S.inspections.find(i=>i.id===inspId);
+  if(!insp){ alert('Inspection not found.'); return; }
+  const biz=insp.bizName||'this property';
+  const dt=insp.completedDate
+    ?new Date(insp.completedDate).toLocaleDateString()
+    :new Date(insp.date).toLocaleDateString();
+  const isDraft=insp.status==='draft';
+  const violCount=S.violations.filter(v=>v.inspectionId===inspId).length;
+  document.getElementById('mo-confirm-title').textContent=isDraft?'🗑️ Delete Draft?':'🗑️ Delete Inspection?';
+  document.getElementById('mo-confirm-msg').innerHTML=
+    `<strong>${biz}</strong><br>${isDraft?'Draft':'Inspection'} started ${dt}`+
+    (violCount>0?`<br><br>⚠️ This will also delete <strong>${violCount} linked violation(s)</strong>.`:'')+
+    `<br><br>This cannot be undone.`;
+  // Wire OK button
+  const okBtn=document.getElementById('mo-confirm-ok');
+  okBtn.onclick=()=>{
+    closeMo('mo-confirm-delete');
+    fbDeleteInsp(inspId);
+    // If we just deleted the active draft, clear curInsp
+    if(S.curInsp && S.curInsp.id===inspId){
+      S.curInsp=null; S.curBiz=null;
+      document.getElementById('insp-ph').classList.remove('hidden');
+      document.getElementById('insp-body').classList.add('hidden');
+    }
+    // Refresh history modal if open
+    setTimeout(()=>{
+      if(document.getElementById('mo-insp-hist').classList.contains('open')) openInspHistory(insp.bizId);
+    },600);
+  };
+  openMo('mo-confirm-delete');
+}
+
+// ═══════════════════════════════════════════════════
+//  VIEW PAST INSPECTION (read-only detail view)
+// ═══════════════════════════════════════════════════
+function viewPastInsp(inspId){
+  const insp=S.inspections.find(i=>i.id===inspId);
+  if(!insp){ alert('Inspection not found.'); return; }
+  const biz=S.businesses.find(b=>b.id===insp.bizId)||S.archivedBusinesses.find(b=>b.id===insp.bizId);
+
+  // Rebuild sections for this occupancy so we have item labels
+  const sections=sectionsForOcc(insp.occupancy, biz&&biz.standpipe);
+  const secAnswers=insp.secAnswers||{};
+  const itemAnswers=insp.itemAnswers||{};
+  const itemNotes=insp.itemNotes||{};
+  const itemPhotos=insp.itemPhotos||{};
+
+  // Tally
+  let passed=0,failed=0,naCount=0,unanswered=0,total=0;
+  sections.forEach(sec=>sec.items.forEach(it=>{
+    total++;
+    const a=itemAnswers[it.id];
+    if(a==='pass') passed++;
+    else if(a==='fail') failed++;
+    else if(a==='na') naCount++;
+    else unanswered++;
+  }));
+
+  const dt=insp.completedDate?new Date(insp.completedDate).toLocaleDateString():'Unknown';
+
+  let html=`
+    <div style="margin-bottom:14px;padding:12px;background:#f8f9fa;border-radius:10px">
+      <div style="font-weight:800;font-size:15px">${insp.bizName||'Unknown Property'}</div>
+      <div style="font-size:12px;color:#666;margin-top:2px">${insp.bizAddress||''}</div>
+      <div style="font-size:12px;color:#666">📅 ${dt} &nbsp;·&nbsp; 👤 ${insp.signature||'Unknown'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <span style="background:#d5f5e3;color:#1e8449;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">✓ ${passed} Pass</span>
+        <span style="background:#fadbd8;color:#922b21;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">✗ ${failed} Fail</span>
+        <span style="background:#eee;color:#555;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">— ${naCount} N/A</span>
+        ${unanswered>0?`<span style="background:#fef9e7;color:#7d6608;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">? ${unanswered} Skipped</span>`:''}
+      </div>
+      ${insp.completionNotes?`<div style="margin-top:8px;font-size:12px;color:#444;background:#fff;padding:8px;border-radius:6px;border:1px solid #ddd">📝 ${insp.completionNotes}</div>`:''}
+    </div>`;
+
+  sections.forEach(sec=>{
+    const secAns=secAnswers[sec.id]||'';
+    // Only show sections that have at least one answered item OR a section-level answer
+    const hasActivity=secAns||sec.items.some(it=>itemAnswers[it.id]||itemNotes[it.id]||(itemPhotos[it.id]&&itemPhotos[it.id].length>0));
+    if(!hasActivity) return;
+
+    const borderColor=secAns==='pass'?'var(--green)':secAns==='fail'?'var(--red)':'var(--gray)';
+    const secLabel=secAns==='pass'?'✓ PASS':secAns==='fail'?'✗ FAIL':secAns==='na'?'N/A':'—';
+    const secLabelColor=secAns==='pass'?'#1e8449':secAns==='fail'?'#922b21':'#888';
+
+    html+=`<div style="margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0">
+      <div style="background:#f8f9fa;border-left:4px solid ${borderColor};padding:10px 13px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700;font-size:13px">${sec.title}</span>
+        <span style="font-size:12px;font-weight:700;color:${secLabelColor}">${secLabel}</span>
+      </div>`;
+
+    const answeredItems=sec.items.filter(it=>itemAnswers[it.id]||itemNotes[it.id]||(itemPhotos[it.id]&&itemPhotos[it.id].length>0));
+    if(answeredItems.length){
+      html+=`<div style="padding:4px 0">`;
+      answeredItems.forEach(it=>{
+        const ans=itemAnswers[it.id]||'';
+        const note=itemNotes[it.id]||'';
+        const photos=itemPhotos[it.id]||[];
+        const photoArr=Array.isArray(photos)?photos:(photos?[photos]:[]);
+        const ansColor=ans==='pass'?'#1e8449':ans==='fail'?'#922b21':ans==='na'?'#888':'#bbb';
+        const ansLabel=ans==='pass'?'✓ PASS':ans==='fail'?'✗ FAIL':ans==='na'?'N/A':'—';
+        const bg=ans==='fail'?'#fff8f8':ans==='pass'?'#f8fff9':'#fff';
+        html+=`<div style="padding:9px 13px;border-top:1px solid #f0f0f0;background:${bg}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="font-size:12px;color:#333;flex:1;line-height:1.4">${it.label}</div>
+            <span style="font-size:11px;font-weight:800;color:${ansColor};white-space:nowrap">${ansLabel}</span>
+          </div>
+          ${it.code?`<div style="font-size:10px;color:#999;margin-top:2px">${it.code}</div>`:''}
+          ${note?`<div style="font-size:11px;color:#555;margin-top:5px;padding:5px 8px;background:#fffbe6;border-radius:4px;border-left:2px solid #f0c040">📝 ${note}</div>`:''}
+          ${photoArr.length>0?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${photoArr.map(url=>`<img src="${url}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #ddd;cursor:pointer" onclick="window.open(this.src,'_blank')">`).join('')}</div>`:''}
+        </div>`;
+      });
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  });
+
+  if(insp.secNotes){
+    const secNoteEntries=Object.entries(insp.secNotes).filter(([,v])=>v);
+    if(secNoteEntries.length){
+      html+=`<div style="margin-top:10px;padding:10px 13px;background:#fffbe6;border-radius:8px;border:1px solid #f0c040">
+        <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#7d6608">SECTION NOTES</div>`;
+      secNoteEntries.forEach(([secId,note])=>{
+        const sec=sections.find(s=>s.id===secId);
+        html+=`<div style="font-size:12px;margin-bottom:4px"><strong>${sec?sec.title:secId}:</strong> ${note}</div>`;
+      });
+      html+=`</div>`;
+    }
+  }
+
+  document.getElementById('view-insp-title').textContent=`📋 ${insp.bizName||'Inspection'} – ${dt}`;
+  document.getElementById('view-insp-body').innerHTML=html||'<div style="padding:20px;text-align:center;color:#999">No items recorded.</div>';
+  openMo('mo-view-insp');
+}
+
 // ── Draft helpers ───────────────────────────────────────────────
 function resumeFirstDraft(){
   const draft=S.inspections.find(i=>i.status==='draft');
