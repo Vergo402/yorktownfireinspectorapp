@@ -7,6 +7,8 @@
 <!-- Firebase SDK (compat v9 – works as global firebase.*) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<!-- SheetJS for Excel export/import -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
   --red:#c0392b; --dark-red:#922b21; --orange:#e67e22; --green:#27ae60;
@@ -413,70 +415,78 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
 </div>
 
 <div id="screen-settings" class="screen">
-  <h2 style="font-size:17px;font-weight:800;margin-bottom:14px">⚙️ Settings</h2>
+  <h2 style="font-size:19px;font-weight:800;margin-bottom:18px">⚙️ Settings</h2>
 
-  <!-- Current user card with logout -->
-  <div class="card" style="margin-bottom:14px">
-    <div class="ch red">👤 Logged In As</div>
+  <!-- Current user strip -->
+  <div class="card" style="margin-bottom:18px">
     <div class="cb">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0" id="set-user-av">?</div>
-        <div>
-          <div style="font-weight:700;font-size:15px" id="set-user-name">—</div>
-          <div style="font-size:11px;color:var(--gray)" id="set-user-role">—</div>
-          <div style="font-size:11px;color:var(--gray)" id="set-user-badge"></div>
+      <div style="display:flex;align-items:center;gap:13px">
+        <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0" id="set-user-av">?</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:16px" id="set-user-name">—</div>
+          <div style="font-size:13px;color:var(--gray);margin-top:1px" id="set-user-role">—</div>
+          <div style="font-size:13px;color:var(--gray)" id="set-user-badge"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn btn-gray btn-sm" onclick="editUser(_currentUser?.id)">✏️ Edit</button>
+          <button class="btn btn-red btn-sm" onclick="logout()">Log Out</button>
         </div>
       </div>
-      <div class="flex gap8">
-        <button class="btn btn-blue" style="flex:1" onclick="editUser(_currentUser?.id)">✏️ Edit My Profile</button>
-        <button class="btn btn-red" style="flex:1" onclick="logout()">🔓 Log Out</button>
-      </div>
     </div>
   </div>
 
-  <!-- Inspector Management -->
-  <div class="card" style="margin-bottom:14px">
-    <div class="ch blue" style="cursor:pointer" onclick="toggleCard('um-card')">👥 Inspector Accounts <span style="font-size:12px;font-weight:400">▾</span></div>
-    <div class="cb" id="um-card">
-      <div id="user-mgmt-list"></div>
-      <button class="btn btn-blue btn-full mt8" onclick="openAddUser()">＋ Add Inspector</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="ch blue">👤 My Inspector Settings</div>
+  <!-- My Details -->
+  <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">My Details</div>
+  <div class="card" style="margin-bottom:18px">
     <div class="cb">
       <div class="fg"><label>Inspector Name</label><input type="text" id="s-iname" placeholder="e.g. John Smith"></div>
       <div class="fg"><label>Inspector Email</label><input type="email" id="s-iemail" placeholder="inspector@yorktownny.gov"></div>
-      <div class="fg"><label>Inspector Phone</label><input type="tel" id="s-iphone" placeholder="(914) 555-0000"></div>
-      <div class="fg"><label>Badge / License #</label><input type="text" id="s-ibadge" placeholder="FI-0000"></div>
+      <div class="frow">
+        <div class="fg"><label>Phone</label><input type="tel" id="s-iphone" placeholder="(914) 555-0000"></div>
+        <div class="fg"><label>Badge / License #</label><input type="text" id="s-ibadge" placeholder="FI-0000"></div>
+      </div>
     </div>
   </div>
-  <div class="card">
-    <div class="ch blue">🏛️ Building Department</div>
+
+  <!-- Department -->
+  <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Department</div>
+  <div class="card" style="margin-bottom:18px">
     <div class="cb">
-      <div class="fg"><label>Department Email</label><input type="email" id="s-demail" placeholder="building@yorktownny.gov"></div>
       <div class="fg"><label>Department Name</label><input type="text" id="s-dname" placeholder="Town of Yorktown Building Dept."></div>
+      <div class="fg"><label>Department Email</label><input type="email" id="s-demail" placeholder="building@yorktownny.gov"></div>
     </div>
   </div>
+
   <button class="btn btn-green btn-full" onclick="saveSettings()">💾 Save Settings</button>
   <div class="al al-green hidden mt8" id="s-saved">✅ Settings saved!</div>
-  <div class="divider"></div>
-  <div class="card">
-    <div class="ch red">⚠️ Data</div>
+
+  <!-- Inspector Accounts -->
+  <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.6px;margin-top:24px;margin-bottom:8px">Inspector Accounts</div>
+  <div class="card" style="margin-bottom:18px">
     <div class="cb">
-      <button class="btn btn-gray btn-full" onclick="exportData()">📤 Export Data (JSON)</button>
-      <button class="btn btn-red btn-full mt8" onclick="clearData()">🗑️ Clear All Data</button>
+      <div id="user-mgmt-list"></div>
+      <button class="btn btn-gray btn-full mt8" onclick="openAddUser()">＋ Add Inspector</button>
     </div>
   </div>
-  <div class="card mt12">
-    <div class="ch green">📚 Code References</div>
-    <div class="cb" style="font-size:12px;line-height:1.6">
-      <b>NYS Uniform Fire Prevention &amp; Building Code</b> – 19 NYCRR Part 1225 (based on IBC/IFC 2020)<br>
+
+  <!-- Data -->
+  <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Data</div>
+  <div class="card" style="margin-bottom:18px">
+    <div class="cb">
+      <p style="font-size:13px;color:var(--gray);margin-bottom:10px">Export all properties, inspections, and violations to an Excel file.</p>
+      <button class="btn btn-gray btn-full" onclick="exportData()">📤 Export Data (Excel)</button>
+    </div>
+  </div>
+
+  <!-- Code References -->
+  <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Code References</div>
+  <div class="card">
+    <div class="cb" style="font-size:13px;line-height:1.8;color:#34495e">
+      <b>NYS Uniform Fire Prevention &amp; Building Code</b> – 19 NYCRR Part 1225<br>
       <b>Town of Yorktown</b> – Chapter 130, Bureau of Fire Prevention<br>
       <b>2020 IBC</b> – Ch.3 Occupancy Classification<br>
       <b>NFPA 1</b> Fire Code · <b>NFPA 72</b> Fire Alarm · <b>NFPA 13/25</b> Sprinklers<br>
-      <b>NFPA 10</b> Extinguishers · <b>NFPA 101</b> Life Safety · <b>NFPA 855</b> Energy Storage Systems<br>
+      <b>NFPA 10</b> Extinguishers · <b>NFPA 101</b> Life Safety · <b>NFPA 855</b> ESS<br>
       <b>IFC §1207</b> Lithium-Ion / Energy Storage Systems
     </div>
   </div>
@@ -2638,27 +2648,57 @@ function saveSettings(){
 //  DATA
 // ═══════════════════════════════════════════════════
 function exportData(){
-  // Export current in-memory state (live from Firebase)
-  const exportObj={
-    businesses:S.businesses,
-    inspections:S.inspections,
-    violations:S.violations,
-    certifications:S.certifications,
-    exportedAt:new Date().toISOString(),
-    exportedBy:_currentUser?_currentUser.name:'unknown'
-  };
-  const blob=new Blob([JSON.stringify(exportObj,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download=`yorktown_fire_${new Date().toISOString().split('T')[0]}.json`;
-  a.click();URL.revokeObjectURL(url);
-}
-function clearData(){
-  if(confirm('⚠️ Delete ALL data permanently? This will delete ALL shared data for ALL users.')&&confirm('Confirm: this cannot be undone.')){
-    Promise.all([dbRemove('businesses'),dbRemove('inspections'),dbRemove('violations')]).then(()=>{
-      renderDash();alert('All shared data cleared.');
-    });
-  }
+  if(typeof XLSX === 'undefined'){ alert('Export library not loaded yet. Please wait a moment and try again.'); return; }
+  const wb = XLSX.utils.book_new();
+  const dateStr = new Date().toISOString().split('T')[0];
+
+  // Sheet 1: Properties
+  const bizRows = S.businesses.map(b=>({
+    'Name': b.name||'',
+    'Address': b.address||'',
+    'City': b.city||'',
+    'Zip': b.zip||'',
+    'Occupancy': b.occupancy||'',
+    'Contact': b.contact||'',
+    'Contact Email': b.contactEmail||'',
+    'Contact Phone': b.contactPhone||'',
+    'Sprinkler': b.sprinkler||'',
+    'Standpipe': b.standpipe||'',
+    'Stories': b.stories||'',
+    'Construction Type': b.constType||'',
+    'Lithium-Ion': b.liion?'Yes':'No',
+    'Reinsp Cycle (yrs)': b.reinspCycle||'',
+    'Notes': b.notes||''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bizRows.length?bizRows:[{Note:'No properties'}]), 'Properties');
+
+  // Sheet 2: Inspections
+  const inspRows = S.inspections.map(i=>({
+    'Date': i.date ? new Date(i.date).toLocaleDateString() : '',
+    'Property': i.bizName||'',
+    'Inspector': i.inspector||'',
+    'Status': i.status||'',
+    'Result': i.result||'',
+    'Score': i.score!=null ? i.score+'%' : '',
+    'Violations Found': i.violations||0,
+    'Occupancy': i.occupancy||''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inspRows.length?inspRows:[{Note:'No inspections'}]), 'Inspections');
+
+  // Sheet 3: Violations
+  const violRows = S.violations.map(v=>({
+    'Date': v.date ? new Date(v.date).toLocaleDateString() : '',
+    'Property': v.bizName||'',
+    'Violation': v.label||'',
+    'Code Reference': v.code||'',
+    'Critical': v.critical?'Yes':'No',
+    'Status': v.status||'open',
+    'Notes': v.notes||'',
+    'Resolved Date': v.resolvedDate ? new Date(v.resolvedDate).toLocaleDateString() : ''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(violRows.length?violRows:[{Note:'No violations'}]), 'Violations');
+
+  XLSX.writeFile(wb, `yorktown_fire_${dateStr}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
