@@ -15,7 +15,7 @@
   --font:'Segoe UI',system-ui,-apple-system,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
+body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;font-size:15px}
 
 /* HEADER */
 #app-header{background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;position:sticky;top:0;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.3)}
@@ -39,8 +39,8 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .lu-btn:hover,.lu-btn:active{border-color:var(--red);background:#fef9f9}
 .lu-avatar{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0}
 .lu-info{flex:1;min-width:0}
-.lu-name{font-weight:700;font-size:14px;color:#2c3e50}
-.lu-role{font-size:11px;color:var(--gray)}
+.lu-name{font-weight:700;font-size:16px;color:#2c3e50}
+.lu-role{font-size:13px;color:var(--gray)}
 .login-pin-wrap{display:none;margin-top:6px}
 .login-pin-wrap.active{display:block}
 .pin-dots{display:flex;gap:8px;justify-content:center;margin:12px 0 8px}
@@ -56,15 +56,15 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .um-row:last-child{border-bottom:none}
 .um-avatar{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
 .um-info{flex:1;min-width:0}
-.um-name{font-weight:700;font-size:13px}
-.um-meta{font-size:11px;color:var(--gray)}
+.um-name{font-weight:700;font-size:15px}
+.um-meta{font-size:13px;color:var(--gray)}
 /* Header user chip */
 .hdr-user{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border-radius:8px;padding:5px 10px;cursor:pointer;border:none;color:#fff;font-family:var(--font);font-size:12px;font-weight:600}
 .hdr-user-av{width:24px;height:24px;border-radius:6px;background:rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 
 /* BOTTOM NAV */
 #bot-nav{position:fixed;bottom:0;left:0;right:0;z-index:999;background:#fff;display:flex;border-top:2px solid var(--border);box-shadow:0 -2px 10px rgba(0,0,0,.09)}
-.nb{flex:1;display:flex;flex-direction:column;align-items:center;padding:7px 3px;gap:2px;background:none;border:none;cursor:pointer;font-size:9px;color:var(--gray);font-family:var(--font)}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;padding:7px 3px;gap:2px;background:none;border:none;cursor:pointer;font-size:11px;color:var(--gray);font-family:var(--font)}
 .nb .ni{font-size:21px}
 .nb.active{color:var(--red)}
 .nb.active .ni{transform:scale(1.15)}
@@ -75,7 +75,7 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 
 /* CARDS */
 .card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
-.ch{padding:12px 15px;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ch{padding:12px 15px;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ch.red{background:linear-gradient(135deg,var(--dark-red),var(--red));color:#fff}
 .ch.blue{background:linear-gradient(135deg,#1a5276,var(--blue));color:#fff}
 .ch.green{background:linear-gradient(135deg,#1e8449,var(--green));color:#fff}
@@ -85,13 +85,13 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 
 /* FORMS */
 .fg{margin-bottom:13px}
-.fg label{display:block;font-weight:600;font-size:12px;margin-bottom:4px;color:#34495e}
-.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:14px;font-family:var(--font);transition:border-color .2s;background:#fff}
+.fg label{display:block;font-weight:600;font-size:14px;margin-bottom:4px;color:#34495e}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:15px;font-family:var(--font);transition:border-color .2s;background:#fff}
 .fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--red)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 
 /* BUTTONS */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .2s;text-decoration:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:10px 16px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .2s;text-decoration:none}
 .btn-red{background:var(--red);color:#fff}.btn-red:hover{background:var(--dark-red)}
 .btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#1e8449}
 .btn-blue{background:var(--blue);color:#fff}.btn-blue:hover{background:#1a5276}
@@ -116,14 +116,14 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .bi:hover,.bi:active{background:#fef9f9}
 .bico{width:42px;height:42px;border-radius:10px;background:#fadbd8;display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0}
 .binfo{flex:1;min-width:0}
-.bname{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.baddr{font-size:11px;color:var(--gray);margin-top:2px}
+.bname{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.baddr{font-size:13px;color:var(--gray);margin-top:2px}
 .bmeta{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
 
 /* CHECKLIST */
 /* Section-level P/F/NA */
 .sec-wrap{margin-bottom:4px}
-.sec-hdr{width:100%;border:none;background:#f8f9fa;border-left:4px solid var(--red);padding:11px 13px;text-align:left;cursor:pointer;font-family:var(--font);font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:6px;transition:background .15s}
+.sec-hdr{width:100%;border:none;background:#f8f9fa;border-left:4px solid var(--red);padding:11px 13px;text-align:left;cursor:pointer;font-family:var(--font);font-weight:700;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:6px;transition:background .15s}
 .sec-hdr:hover{background:#edf2f7}
 .sec-hdr.sec-na{border-left-color:var(--gray);opacity:.65}
 .sec-pfa{display:flex;gap:5px;align-items:center;flex-shrink:0}
@@ -148,25 +148,25 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .rb.rf{border-color:var(--red);color:var(--red)}.rb.rf.sel{background:var(--red);color:#fff}
 .rb.rn{border-color:var(--gray);color:var(--gray)}.rb.rn.sel{background:var(--gray);color:#fff}
 .ci-body{flex:1;min-width:0}
-.ci-lbl{font-size:12px;font-weight:500;line-height:1.4}
-.ci-code{font-size:10px;color:var(--blue);margin-top:2px;font-weight:600}
-.ci-note{width:100%;margin-top:5px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:11px;resize:vertical;display:none;font-family:var(--font)}
+.ci-lbl{font-size:14px;font-weight:500;line-height:1.4}
+.ci-code{font-size:12px;color:var(--blue);margin-top:2px;font-weight:600}
+.ci-note{width:100%;margin-top:5px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical;display:none;font-family:var(--font)}
 .ci-note.show{display:block}
-.note-toggle{font-size:10px;color:var(--gray);background:none;border:none;cursor:pointer;padding:1px 0;margin-top:2px;font-family:var(--font)}
+.note-toggle{font-size:12px;color:var(--gray);background:none;border:none;cursor:pointer;padding:1px 0;margin-top:2px;font-family:var(--font)}
 
 /* VIOLATIONS */
 .vi{padding:13px;border-left:4px solid var(--red);border-bottom:1px solid var(--border);background:#fff}
 .vi:last-child{border-bottom:none}
 .vi-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-.vi-title{font-weight:700;font-size:13px}
-.vi-detail{font-size:11px;color:var(--gray);margin-top:3px}
-.vi-code{font-size:10px;color:var(--blue);font-weight:600;margin-top:2px}
+.vi-title{font-weight:700;font-size:15px}
+.vi-detail{font-size:13px;color:var(--gray);margin-top:3px}
+.vi-code{font-size:12px;color:var(--blue);font-weight:600;margin-top:2px}
 
 /* STATS */
 .sg{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:14px}
 .sc{background:#fff;border-radius:var(--radius);padding:14px;text-align:center;box-shadow:var(--shadow)}
 .sn{font-size:30px;font-weight:800;line-height:1}
-.sl{font-size:11px;color:var(--gray);margin-top:3px;font-weight:600}
+.sl{font-size:13px;color:var(--gray);margin-top:3px;font-weight:600}
 
 /* MODAL */
 .mo{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:none;align-items:flex-end;justify-content:center}
@@ -224,9 +224,9 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .cert-item:last-child{border-bottom:none}
 .cert-icon{width:38px;height:38px;border-radius:9px;background:#d6eaf8;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
 .cert-info{flex:1;min-width:0}
-.cert-name{font-weight:700;font-size:13px}
-.cert-detail{font-size:11px;color:var(--gray);margin-top:2px}
-.cert-exp{font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px}
+.cert-name{font-weight:700;font-size:15px}
+.cert-detail{font-size:13px;color:var(--gray);margin-top:2px}
+.cert-exp{font-size:13px;font-weight:700;padding:3px 8px;border-radius:8px}
 .exp-ok{background:#d5f5e3;color:#1e8449}
 .exp-soon{background:#fdebd0;color:#935116}
 .exp-over{background:#fadbd8;color:var(--dark-red)}
@@ -237,6 +237,14 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 .upload-zone .uz-icon{font-size:40px;margin-bottom:8px}
 .upload-zone p{font-size:13px;color:var(--gray)}
 .upload-zone strong{color:var(--red)}
+
+/* PHOTO CAPTURE */
+.photo-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.photo-thumb{position:relative;width:64px;height:64px;border-radius:7px;overflow:hidden;flex-shrink:0;border:2px solid var(--border)}
+.photo-thumb img{width:100%;height:100%;object-fit:cover}
+.photo-del{position:absolute;top:1px;right:1px;background:rgba(0,0,0,.55);border:none;color:#fff;font-size:11px;width:18px;height:18px;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.photo-add{width:64px;height:64px;border-radius:7px;border:2px dashed var(--border);background:#f8f9fa;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:var(--gray);flex-shrink:0;transition:all .15s}
+.photo-add:hover{border-color:var(--red);background:#fef9f9;color:var(--red)}
 
 /* ARCHIVE / FILTER TABS */
 .filter-tabs{display:flex;gap:0;margin-bottom:13px;border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
@@ -252,8 +260,8 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh}
 /* INSPECTION HISTORY */
 .ih-row{padding:11px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
 .ih-row:last-child{border-bottom:none}
-.ih-date{font-size:12px;font-weight:700;color:#2c3e50}
-.ih-meta{font-size:11px;color:var(--gray);margin-top:2px}
+.ih-date{font-size:14px;font-weight:700;color:#2c3e50}
+.ih-meta{font-size:13px;color:var(--gray);margin-top:2px}
 </style>
 </head>
 <body>
@@ -1364,6 +1372,16 @@ function showScreen(n){
   if(n==='settings')loadSettings();
   if(n==='reinspections')renderReinspections();
   if(n==='certs')renderCerts();
+  // If navigating to inspection screen and a curInsp is loaded, show it
+  if(n==='inspection'){
+    if(S.curInsp && S.curBiz){
+      renderInsp();
+    } else {
+      // No active inspection — show placeholder
+      document.getElementById('insp-ph').classList.remove('hidden');
+      document.getElementById('insp-body').classList.add('hidden');
+    }
+  }
   window.scrollTo(0,0);
 }
 
@@ -1852,10 +1870,30 @@ function startInsp(bizId) {
   if (!biz) return;
   S.curBiz = biz;
   const draft = S.inspections.find(i=>i.bizId===bizId && i.status==='draft');
-  if (draft && confirm('Resume existing draft inspection?')) {
-    S.curInsp = draft;
-    // Ensure sections updated with current checklist data
-    S.curInsp.sections = sectionsForOcc(biz.occupancy, biz.standpipe);
+  if (draft) {
+    // Always resume the existing draft; offer option to start fresh
+    const choice = confirm(`Resume draft inspection for "${biz.name}"?\n\nTap OK to resume, Cancel to start a brand-new inspection (the draft will be deleted).`);
+    if (choice) {
+      S.curInsp = draft;
+      // Rebuild sections from current checklist data but preserve all answers/notes/photos
+      S.curInsp.sections = sectionsForOcc(biz.occupancy, biz.standpipe);
+      // Ensure photo map exists
+      if(!S.curInsp.itemPhotos) S.curInsp.itemPhotos = {};
+    } else {
+      // Delete the old draft, start fresh
+      fbDeleteInsp(draft.id);
+      S.curInsp = {
+        id:'insp_'+Date.now(),
+        bizId:biz.id, bizName:biz.name,
+        bizAddress:biz.address+', '+biz.city+', NY '+biz.zip,
+        occupancy:biz.occupancy, date:new Date().toISOString(),
+        status:'draft',
+        secAnswers:{}, itemAnswers:{}, itemNotes:{}, itemPhotos:{},
+        sections: sectionsForOcc(biz.occupancy, biz.standpipe)
+      };
+      S.inspections.push(S.curInsp);
+      save();
+    }
   } else {
     S.curInsp = {
       id:'insp_'+Date.now(),
@@ -1863,9 +1901,7 @@ function startInsp(bizId) {
       bizAddress:biz.address+', '+biz.city+', NY '+biz.zip,
       occupancy:biz.occupancy, date:new Date().toISOString(),
       status:'draft',
-      secAnswers:{},  // sectionId -> 'pass'|'fail'|'na'
-      itemAnswers:{}, // itemId   -> 'pass'|'fail'|'na'
-      itemNotes:{},   // itemId   -> string
+      secAnswers:{}, itemAnswers:{}, itemNotes:{}, itemPhotos:{},
       sections: sectionsForOcc(biz.occupancy, biz.standpipe)
     };
     S.inspections.push(S.curInsp);
@@ -1948,6 +1984,14 @@ function itemHTML(item, insp, sectionIsNA) {
   const ans = insp.itemAnswers[item.id] || '';
   const note = insp.itemNotes[item.id] || '';
   const disabled = sectionIsNA ? 'ci-na' : '';
+  // Build photo row inline (reuses buildPhotoRowHTML logic but inlined for initial render)
+  const photos = (insp.itemPhotos && insp.itemPhotos[item.id]) || [];
+  const arr = Array.isArray(photos) ? photos : (photos ? [photos] : []);
+  const thumbsHTML = arr.map((url, i) => `
+    <div class="photo-thumb">
+      <img src="${url}" alt="photo">
+      <button class="photo-del" onclick="removePhoto('${item.id}',${i})" title="Remove photo">✕</button>
+    </div>`).join('');
   return `
     <div class="ci ${disabled}" id="ci-${item.id}">
       <div class="ci-ctrl">
@@ -1962,6 +2006,11 @@ function itemHTML(item, insp, sectionIsNA) {
         <div class="ci-code">📜 ${item.code}</div>
         <textarea class="ci-note${note?' show':''}" id="note-${item.id}" placeholder="Violation detail / notes…" onchange="saveItemNote('${item.id}',this.value)">${note}</textarea>
         <button class="note-toggle" onclick="toggleNote('${item.id}')">✏️ ${note?'Edit':'Add'} note</button>
+        <div class="photo-row" id="photos-${item.id}">
+          ${thumbsHTML}
+          <div class="photo-add" onclick="addPhoto('${item.id}')"><span>📷</span><span style="font-size:9px;margin-top:2px">Add</span></div>
+          <input type="file" accept="image/*" capture="environment" style="display:none" id="photo-input-${item.id}" onchange="handlePhotoFile('${item.id}',this)">
+        </div>
       </div>
     </div>
   `;
@@ -2040,6 +2089,78 @@ function saveItemNote(itemId,val){
   S.curInsp.itemNotes[itemId]=val;
   save();
 }
+
+// ── Photo capture per inspection item ──────────────────────────────────────
+function addPhoto(itemId) {
+  const inp = document.getElementById('photo-input-'+itemId);
+  if(inp) inp.click();
+}
+
+function handlePhotoFile(itemId, input) {
+  const file = input.files && input.files[0];
+  if(!file || !S.curInsp) return;
+  // Resize + convert to base64
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if(w > MAX || h > MAX) {
+        if(w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataURL = canvas.toDataURL('image/jpeg', 0.75);
+      saveItemPhoto(itemId, dataURL);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = ''; // reset so same file can be re-selected
+}
+
+function saveItemPhoto(itemId, dataURL) {
+  if(!S.curInsp) return;
+  if(!S.curInsp.itemPhotos) S.curInsp.itemPhotos = {};
+  const existing = S.curInsp.itemPhotos[itemId];
+  if(Array.isArray(existing)) {
+    existing.push(dataURL);
+  } else {
+    S.curInsp.itemPhotos[itemId] = [dataURL];
+  }
+  save();
+  // Re-render just the photo row for this item
+  const row = document.getElementById('photos-'+itemId);
+  if(row) row.innerHTML = buildPhotoRowHTML(itemId);
+}
+
+function removePhoto(itemId, idx) {
+  if(!S.curInsp || !S.curInsp.itemPhotos) return;
+  const arr = S.curInsp.itemPhotos[itemId];
+  if(!Array.isArray(arr)) return;
+  arr.splice(idx, 1);
+  if(arr.length === 0) delete S.curInsp.itemPhotos[itemId];
+  save();
+  const row = document.getElementById('photos-'+itemId);
+  if(row) row.innerHTML = buildPhotoRowHTML(itemId);
+}
+
+function buildPhotoRowHTML(itemId) {
+  const photos = (S.curInsp && S.curInsp.itemPhotos && S.curInsp.itemPhotos[itemId]) || [];
+  const arr = Array.isArray(photos) ? photos : (photos ? [photos] : []);
+  let thumbs = arr.map((url, i) => `
+    <div class="photo-thumb">
+      <img src="${url}" alt="photo">
+      <button class="photo-del" onclick="removePhoto('${itemId}',${i})" title="Remove photo">✕</button>
+    </div>`).join('');
+  thumbs += `<div class="photo-add" onclick="addPhoto('${itemId}')"><span>📷</span><span style="font-size:9px;margin-top:2px">Add</span></div>`;
+  thumbs += `<input type="file" accept="image/*" capture="environment" style="display:none" id="photo-input-${itemId}" onchange="handlePhotoFile('${itemId}',this)">`;
+  return thumbs;
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 function toggleSec(secId){
   const el=document.getElementById('sitems-'+secId);
@@ -2473,7 +2594,7 @@ function renderDash(){
   const rv=S.violations.filter(v=>v.status==='open').sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5);
   document.getElementById('dash-violations').innerHTML=!rv.length
     ?'<div class="es" style="padding:18px"><div class="ei" style="font-size:32px">✅</div><p>No open violations.</p></div>'
-    :rv.map(v=>`<div class="vi" style="border-left-color:${v.critical?'var(--red)':'var(--orange)'}"><div class="vi-hdr"><div><div class="vi-title" style="font-size:12px">${v.critical?'★ ':''}${v.label}</div><div class="vi-detail">🏢 ${v.bizName} · ${new Date(v.date).toLocaleDateString()}</div></div>${v.critical?'<span class="badge bdr">★</span>':'<span class="badge bdo">STD</span>'}</div></div>`).join('');
+    :rv.map(v=>`<div class="vi" style="border-left-color:${v.critical?'var(--red)':'var(--orange)'}"><div class="vi-hdr"><div><div class="vi-title">${v.critical?'★ ':''}${v.label}</div><div class="vi-detail">🏢 ${v.bizName} · ${new Date(v.date).toLocaleDateString()}</div></div>${v.critical?'<span class="badge bdr">★</span>':'<span class="badge bdo">STD</span>'}</div></div>`).join('');
 }
 
 // ═══════════════════════════════════════════════════
