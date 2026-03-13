@@ -9,6 +9,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <!-- SheetJS for Excel export/import -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- jsPDF + autotable for PDF reports -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root {
   --red:#c0392b; --dark-red:#922b21; --orange:#e67e22; --green:#27ae60;
@@ -805,15 +808,26 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
     <div class="divider"></div>
     <div class="fg"><label>Inspector Signature (Type Full Name)</label><input type="text" id="comp-sig" placeholder="Full legal name"></div>
     <div class="fg"><label>General Notes</label><textarea id="comp-notes" rows="2" placeholder="Any general notes…"></textarea></div>
-    <div class="flex gap8 fwrap">
-      <button class="btn btn-red" style="flex:1" onclick="sendEmail()">📧 Email Violation Report</button>
-      <button class="btn btn-green" style="flex:1" onclick="finalizeInsp()">🏁 Finalize &amp; Save</button>
-    </div>
+    <button class="btn btn-green btn-full" onclick="finalizeInsp()">🏁 Finalize &amp; Save</button>
+    <button class="btn btn-red btn-full mt8" onclick="finalizeAndEmail()">📄 Finalize, Save &amp; Email PDF Report</button>
     <button class="btn btn-gray btn-full mt8" onclick="closeMo('mo-complete')">Back</button>
   </div>
 </div>
 
 <!-- MODAL: Email Preview -->
+<!-- MODAL: PDF Report Viewer -->
+<div class="mo" id="mo-pdf-report">
+  <div class="md" style="max-height:92vh">
+    <div class="md-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="md-title" style="margin-bottom:0">📄 Inspection Report</div>
+      <button class="btn btn-sm btn-gray" onclick="closeMo('mo-pdf-report')">✕</button>
+    </div>
+    <div id="pdf-report-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <div id="pdf-report-preview" style="background:#f8f9fa;border-radius:8px;padding:12px;font-size:12px;line-height:1.6;max-height:60vh;overflow-y:auto;font-family:monospace;white-space:pre-wrap"></div>
+  </div>
+</div>
+
 <div class="mo" id="mo-email">
   <div class="md">
     <div class="md-handle"></div>
@@ -835,7 +849,10 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
     <div class="md-handle"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div class="md-title" style="margin-bottom:0" id="view-insp-title">📋 Inspection Detail</div>
-      <button class="btn btn-sm btn-gray" onclick="closeMo('mo-view-insp')">✕ Close</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-red" id="view-insp-pdf-btn" onclick="" title="Download PDF">📄 PDF</button>
+        <button class="btn btn-sm btn-gray" onclick="closeMo('mo-view-insp')">✕</button>
+      </div>
     </div>
     <div id="view-insp-body"></div>
   </div>
@@ -2383,38 +2400,7 @@ function collectViolations(insp){
   return viols;
 }
 
-function finalizeInsp(){
-  const insp=S.curInsp; if(!insp) return;
-  const sig=document.getElementById('comp-sig').value.trim();
-  if(!sig){alert('Please enter your signature (full name) to finalize.');return;}
-  insp.status='completed';
-  insp.completedDate=new Date().toISOString();
-  insp.signature=sig;
-  insp.completionNotes=document.getElementById('comp-notes').value;
-  // Save completed inspection to Firebase
-  fbSaveInsp(insp);
-  // Push new violations to Firebase (skip duplicates already in S.violations)
-  const viols=collectViolations(insp);
-  viols.forEach(v=>{
-    const exists=S.violations.find(x=>x.itemId===v.id&&x.bizId===insp.bizId&&x.status==='open');
-    if(!exists){
-      const newV={
-        id:'viol_'+Date.now()+'_'+Math.random().toString(36).slice(2),
-        bizId:insp.bizId, bizName:insp.bizName, bizAddress:insp.bizAddress,
-        itemId:v.id, label:v.label, code:v.code, critical:v.critical,
-        note:v.note, sectionTitle:v.sectionTitle,
-        inspectionId:insp.id, date:insp.completedDate, status:'open'
-      };
-      fbSaveViol(newV);
-    }
-  });
-  closeMo('mo-complete');
-  S.curInsp=null; S.curBiz=null;
-  document.getElementById('insp-ph').classList.remove('hidden');
-  document.getElementById('insp-body').classList.add('hidden');
-  alert('✅ Inspection finalized and saved!');
-  showScreen('dashboard');
-}
+// finalizeInsp moved to PDF engine block above
 
 function sendEmail(){
   const insp=S.curInsp, biz=S.curBiz;
@@ -3290,6 +3276,7 @@ function openInspHistory(bizId){
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn btn-sm btn-blue" onclick="viewPastInsp('${i.id}')" title="View full inspection">👁️ View</button>
+            <button class="btn btn-sm btn-red" onclick="viewOrDownloadReport('${i.id}')" title="PDF Report">📄 PDF</button>
             <button class="btn btn-sm btn-gray" onclick="mobileConfirmDelete('${i.id}')" title="Delete">🗑️</button>
           </div>
         </div>`;
@@ -3464,8 +3451,566 @@ function viewPastInsp(inspId){
   }
 
   document.getElementById('view-insp-title').textContent=`📋 ${insp.bizName||'Inspection'} – ${dt}`;
+  const pdfBtn=document.getElementById('view-insp-pdf-btn');
+  if(pdfBtn) pdfBtn.onclick=()=>viewOrDownloadReport(inspId);
   document.getElementById('view-insp-body').innerHTML=html||'<div style="padding:20px;text-align:center;color:#999">No items recorded.</div>';
   openMo('mo-view-insp');
+}
+
+
+// ═══════════════════════════════════════════════════
+//  PDF REPORT ENGINE
+// ═══════════════════════════════════════════════════
+
+// Firebase path for stored reports: /reports/{inspId}
+function fbSaveReport(inspId, base64pdf){
+  return dbSet('reports/'+inspId, {inspId, base64pdf, savedAt:new Date().toISOString()});
+}
+function fbGetReport(inspId){
+  return dbGet('reports/'+inspId);
+}
+function fbDeleteReport(inspId){
+  return dbRemove('reports/'+inspId);
+}
+
+// Load base64 image and return as data URL (handles cross-origin already-data-url)
+function ensureDataURL(src){
+  return new Promise(resolve=>{
+    if(src.startsWith('data:')){ resolve(src); return; }
+    const img=new Image(); img.crossOrigin='anonymous';
+    img.onload=function(){
+      const c=document.createElement('canvas');
+      c.width=img.naturalWidth; c.height=img.naturalHeight;
+      c.getContext('2d').drawImage(img,0,0);
+      resolve(c.toDataURL('image/jpeg',0.8));
+    };
+    img.onerror=()=>resolve(null);
+    img.src=src;
+  });
+}
+
+async function generateInspectionPDF(insp, biz){
+  if(typeof window.jspdf === 'undefined'){
+    alert('PDF library still loading. Please wait a moment and try again.');
+    return null;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'letter'});
+  const PW = 215.9; // letter width mm
+  const M = 15;     // margin
+  const CW = PW - M*2;
+
+  const s = S.settings;
+  const dt = insp.completedDate
+    ? new Date(insp.completedDate).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+    : new Date(insp.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const sections = sectionsForOcc(insp.occupancy, biz&&biz.standpipe);
+  const secAnswers = insp.secAnswers||{};
+  const itemAnswers = insp.itemAnswers||{};
+  const itemNotes = insp.itemNotes||{};
+  const itemPhotos = insp.itemPhotos||{};
+
+  // ── Helper: check page break ──────────────────────
+  let y = M;
+  function checkY(needed){
+    if(y + needed > 270){ doc.addPage(); y = M; drawPageHeader(); }
+  }
+  function drawPageHeader(){
+    doc.setFillColor(180,20,20);
+    doc.rect(0,0,PW,12,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('TOWN OF YORKTOWN — BUREAU OF FIRE PREVENTION', M, 8);
+    doc.text(`Page ${doc.internal.getNumberOfPages()}`, PW-M, 8, {align:'right'});
+    doc.setTextColor(0,0,0);
+  }
+
+  // ── PAGE 1 HEADER ─────────────────────────────────
+  // Red banner
+  doc.setFillColor(180,20,20);
+  doc.rect(0,0,PW,28,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text('TOWN OF YORKTOWN', M, 10);
+  doc.text('BUREAU OF FIRE PREVENTION', M, 17);
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('Fire Inspection Report', M, 23);
+  doc.setTextColor(0,0,0);
+
+  y = 34;
+
+  // Determine report type
+  const viols = collectViolations(insp);
+  const critV = viols.filter(v=>v.critical);
+  const stdV = viols.filter(v=>!v.critical);
+
+  // Status banner
+  if(viols.length===0){
+    doc.setFillColor(39,174,96); doc.rect(M,y,CW,9,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text('✓  NO VIOLATIONS — COMPLIANT', M+4, y+6.2);
+  } else if(critV.length>0){
+    doc.setFillColor(192,57,43); doc.rect(M,y,CW,9,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text(`⚠  ${viols.length} VIOLATION(S) — ${critV.length} CRITICAL — IMMEDIATE ACTION REQUIRED`, M+4, y+6.2);
+  } else {
+    doc.setFillColor(230,126,34); doc.rect(M,y,CW,9,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text(`⚠  ${viols.length} STANDARD VIOLATION(S) — CORRECTION REQUIRED`, M+4, y+6.2);
+  }
+  doc.setTextColor(0,0,0);
+  y += 13;
+
+  // Property info box
+  doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+  doc.rect(M, y, CW, 42);
+  doc.setFillColor(245,245,245); doc.rect(M, y, CW, 7,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('PROPERTY INFORMATION', M+3, y+5);
+  y += 10;
+
+  const col1 = M+3, col2 = M+CW/2+3;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+  const propLines = [
+    ['Property:', biz?biz.name:insp.bizName||''],
+    ['Address:', biz?(biz.address+', '+biz.city+', NY '+(biz.zip||'')):insp.bizAddress||''],
+    ['Occupancy:', OL[insp.occupancy]||insp.occupancy||''],
+    ['Responsible Party:', biz?(biz.contact||'—'):'—'],
+    ['Contact Email:', biz?(biz.contactEmail||'—'):'—'],
+    ['Contact Phone:', biz?(biz.contactPhone||'—'):'—'],
+  ];
+  const inspLines = [
+    ['Inspection Date:', dt],
+    ['Time In:', insp.timeIn||'—'],
+    ['Time Out:', insp.timeOut||'—'],
+    ['Contact On-Site:', insp.contactPerson||'—'],
+    ['Inspector:', s.inspectorName||'—'],
+    ['Badge:', s.inspectorBadge||'—'],
+  ];
+  propLines.forEach((row,i)=>{
+    const yy = y + i*5.5;
+    doc.setFont('helvetica','bold'); doc.text(row[0], col1, yy);
+    doc.setFont('helvetica','normal');
+    const val = doc.splitTextToSize(row[1], CW/2-20);
+    doc.text(val[0]||'', col1+28, yy);
+  });
+  inspLines.forEach((row,i)=>{
+    const yy = y + i*5.5;
+    doc.setFont('helvetica','bold'); doc.text(row[0], col2, yy);
+    doc.setFont('helvetica','normal'); doc.text(row[1], col2+26, yy);
+  });
+  y += propLines.length*5.5 + 6;
+
+  // ── SUMMARY STATS ──────────────────────────────────
+  checkY(20);
+  let passed=0,failed=0,naCount=0,skipped=0,total=0;
+  sections.forEach(sec=>{
+    const sa=secAnswers[sec.id]||'';
+    if(sa==='na') return;
+    sec.items.forEach(it=>{
+      const a=itemAnswers[it.id];
+      if(a!=='na') total++;
+      if(a==='pass') passed++;
+      else if(a==='fail') failed++;
+      else if(a==='na') naCount++;
+      else skipped++;
+    });
+  });
+  const pct = total>0?Math.round(passed/total*100):0;
+
+  doc.setFillColor(245,245,245); doc.rect(M,y,CW,16,'F');
+  doc.setDrawColor(200,200,200); doc.rect(M,y,CW,16);
+  const statW = CW/5;
+  [
+    ['PASSED',String(passed),'#27ae60'],
+    ['FAILED',String(failed),'#c0392b'],
+    ['N/A',String(naCount),'#95a5a6'],
+    ['SKIPPED',String(skipped),'#e67e22'],
+    ['SCORE',pct+'%', pct>=80?'#27ae60':pct>=60?'#e67e22':'#c0392b'],
+  ].forEach(([label,val,color],i)=>{
+    const x = M + i*statW + statW/2;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.setTextColor(...hexToRgb(color));
+    doc.text(val, x, y+9, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    doc.setTextColor(100,100,100);
+    doc.text(label, x, y+14, {align:'center'});
+  });
+  doc.setTextColor(0,0,0);
+  y += 20;
+
+  // ── VIOLATIONS SECTION ────────────────────────────
+  if(viols.length>0){
+    checkY(14);
+    doc.setFillColor(220,50,50); doc.rect(M,y,CW,7,'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text(`VIOLATIONS REQUIRING CORRECTIVE ACTION  (${viols.length} total)`, M+3, y+5);
+    doc.setTextColor(0,0,0);
+    y += 9;
+
+    for(let vi=0; vi<viols.length; vi++){
+      const v = viols[vi];
+      const isCrit = v.critical;
+      checkY(22);
+
+      // Violation row bg
+      doc.setFillColor(isCrit?255:255, isCrit?243:255, isCrit?243:255);
+      if(isCrit){ doc.setDrawColor(192,57,43); } else { doc.setDrawColor(230,126,34); }
+      doc.setLineWidth(0.5);
+
+      // Number circle
+      doc.setFillColor(isCrit?192:230, isCrit?57:126, isCrit?43:34);
+      doc.circle(M+4, y+4, 3.5, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+      doc.text(String(vi+1), M+4, y+5.5, {align:'center'});
+      doc.setTextColor(0,0,0);
+
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      if(isCrit){
+        doc.setTextColor(192,57,43);
+        doc.text('★ CRITICAL', M+10, y+4);
+        doc.setTextColor(0,0,0);
+        doc.text(v.label, M+10, y+9);
+      } else {
+        doc.setFont('helvetica','normal');
+        doc.text(v.label, M+10, y+4);
+      }
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(100,100,100);
+      const labelLines = doc.splitTextToSize(v.label, CW-15);
+      const labelH = isCrit ? (labelLines.length*4+6) : (labelLines.length*4+2);
+
+      // Rewrite label with wrapping
+      doc.setFillColor(isCrit?255:252, isCrit?252:255, 252);
+      doc.setDrawColor(210,210,210); doc.setLineWidth(0.2);
+      const boxH = Math.max(16, labelH + (v.note?10:0) + (v.code?6:0));
+      doc.rect(M, y, CW, boxH);
+      doc.setFillColor(isCrit?192:230, isCrit?57:126, isCrit?43:34);
+      doc.rect(M, y, 1.5, boxH, 'F');
+
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(0,0,0);
+      let ly = y+5;
+      if(isCrit){ doc.setTextColor(192,57,43); doc.text('★ CRITICAL  ', M+10, ly); doc.setTextColor(0,0,0); ly+=4.5; }
+      const wrappedLabel = doc.splitTextToSize(v.label, CW-14);
+      doc.setFont('helvetica',isCrit?'bold':'normal'); doc.setFontSize(8.5);
+      wrappedLabel.forEach(line=>{ doc.text(line, M+10, ly); ly+=4.5; });
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(100,100,100);
+      if(v.code){ doc.text('Code: '+v.code, M+10, ly); ly+=4; }
+      doc.text('Section: '+v.sectionTitle.replace(/[^\x00-\x7F]/g,''), M+10, ly); ly+=4;
+      if(v.note){
+        doc.setTextColor(60,60,60); doc.setFont('helvetica','italic');
+        const noteLines = doc.splitTextToSize('Notes: '+v.note, CW-14);
+        noteLines.forEach(line=>{ checkY(5); doc.text(line, M+10, ly); ly+=4; });
+        doc.setFont('helvetica','normal');
+      }
+      doc.setTextColor(0,0,0);
+      y += boxH + 3;
+
+      // Violation photos
+      const photos = itemPhotos[v.id]||[];
+      const photoArr = Array.isArray(photos)?photos:(photos?[photos]:[]);
+      if(photoArr.length>0){
+        checkY(10);
+        doc.setFont('helvetica','italic'); doc.setFontSize(7.5); doc.setTextColor(100,100,100);
+        doc.text(`Photos (${photoArr.length}):`, M+10, y+4);
+        doc.setTextColor(0,0,0);
+        y += 6;
+        for(let pi=0; pi<photoArr.length; pi++){
+          checkY(52);
+          try {
+            const dataUrl = await ensureDataURL(photoArr[pi]);
+            if(dataUrl){
+              // Calculate aspect ratio
+              const img = new Image();
+              await new Promise(res=>{ img.onload=res; img.onerror=res; img.src=dataUrl; });
+              const aspect = img.naturalHeight>0 ? img.naturalWidth/img.naturalHeight : 1;
+              const imgW = Math.min(80, CW-20);
+              const imgH = imgW/aspect;
+              checkY(imgH+6);
+              doc.addImage(dataUrl, 'JPEG', M+10, y, imgW, imgH);
+              y += imgH + 4;
+            }
+          } catch(e){ /* skip bad photo */ }
+        }
+        y += 2;
+      }
+    }
+
+    // Required actions box
+    checkY(30);
+    doc.setFillColor(255,243,243); doc.rect(M,y,CW,28);
+    doc.setDrawColor(192,57,43); doc.setLineWidth(0.4); doc.rect(M,y,CW,28);
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(192,57,43);
+    doc.text('REQUIRED CORRECTIVE ACTIONS', M+3, y+6);
+    doc.setFont('helvetica','normal'); doc.setTextColor(0,0,0); doc.setFontSize(8);
+    const actions = [
+      '• Critical violations: correct immediately or within 24–72 hours',
+      '• Submit written corrective action plan to: '+s.deptName,
+      '• Re-inspection required within 30 days unless otherwise directed',
+      '• Failure to correct may result in fines, appearance tickets, or Order to Vacate',
+    ];
+    actions.forEach((a,i)=>{ doc.text(a, M+3, y+12+i*5); });
+    y += 32;
+  }
+
+  // ── FULL CHECKLIST ────────────────────────────────
+  checkY(12);
+  doc.setFillColor(50,50,50); doc.rect(M,y,CW,7,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('FULL INSPECTION CHECKLIST', M+3, y+5);
+  doc.setTextColor(0,0,0);
+  y += 9;
+
+  for(const sec of sections){
+    const secAns = secAnswers[sec.id]||'';
+    const secColor = secAns==='pass'?[39,174,96]:secAns==='fail'?[192,57,43]:secAns==='na'?[150,150,150]:[180,180,180];
+    checkY(9);
+    doc.setFillColor(...secColor);
+    doc.rect(M,y,CW,7,'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    const secLabel = secAns==='pass'?'PASS':secAns==='fail'?'FAIL':secAns==='na'?'N/A':'—';
+    doc.text(sec.title.replace(/[^\x00-\x7F]/g,''), M+3, y+5);
+    doc.text(secLabel, M+CW-3, y+5, {align:'right'});
+    doc.setTextColor(0,0,0);
+    y += 9;
+
+    // Items table
+    const tableBody = sec.items.map(it=>{
+      const a = itemAnswers[it.id]||'';
+      const note = itemNotes[it.id]||'';
+      const photos = itemPhotos[it.id]||[];
+      const pArr = Array.isArray(photos)?photos:(photos?[photos]:[]);
+      const label = (it.critical?'★ ':'')+it.label;
+      const status = a==='pass'?'PASS':a==='fail'?'FAIL':a==='na'?'N/A':'—';
+      return [label, status, note+(pArr.length>0?' ['+pArr.length+' photo(s)]':'')];
+    });
+
+    doc.autoTable({
+      startY: y,
+      margin:{left:M, right:M},
+      head:[['Inspection Item','Result','Notes']],
+      body: tableBody,
+      theme:'grid',
+      headStyles:{fillColor:[80,80,80], textColor:255, fontStyle:'bold', fontSize:7.5},
+      styles:{fontSize:7.5, cellPadding:2, overflow:'linebreak', font:'helvetica'},
+      columnStyles:{
+        0:{cellWidth:CW*0.58},
+        1:{cellWidth:CW*0.12, halign:'center'},
+        2:{cellWidth:CW*0.30},
+      },
+      didParseCell(data){
+        if(data.column.index===1 && data.section==='body'){
+          const v=data.cell.raw;
+          if(v==='FAIL'){ data.cell.styles.textColor=[192,57,43]; data.cell.styles.fontStyle='bold'; }
+          else if(v==='PASS'){ data.cell.styles.textColor=[39,174,96]; data.cell.styles.fontStyle='bold'; }
+          else if(v==='N/A'){ data.cell.styles.textColor=[150,150,150]; }
+        }
+        if(data.column.index===0 && data.section==='body' && data.cell.raw.startsWith('★')){
+          data.cell.styles.textColor=[192,57,43];
+        }
+      },
+    });
+    y = doc.lastAutoTable.finalY + 4;
+  }
+
+  // ── SIGNATURE BLOCK ───────────────────────────────
+  checkY(30);
+  doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+  doc.rect(M,y,CW,26);
+  doc.setFillColor(245,245,245); doc.rect(M,y,CW,7,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  doc.text('INSPECTOR CERTIFICATION', M+3, y+5);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('I certify that this inspection was conducted in accordance with applicable fire and building codes.', M+3, y+13);
+  doc.text(`Inspector: ${insp.signature||s.inspectorName||'—'}`, M+3, y+19);
+  if(s.inspectorBadge) doc.text(`Badge #: ${s.inspectorBadge}`, M+3, y+24);
+  doc.text(`Phone: ${s.inspectorPhone||'—'}  |  Email: ${s.inspectorEmail||'—'}`, M+80, y+19);
+  doc.text(`Date: ${dt}`, M+80, y+24);
+  y += 30;
+
+  // Footer on all pages
+  const totalPages = doc.internal.getNumberOfPages();
+  for(let pg=1; pg<=totalPages; pg++){
+    doc.setPage(pg);
+    doc.setFontSize(7); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+    doc.text(
+      `Town of Yorktown Bureau of Fire Prevention  |  ${s.deptName||''}  |  Generated ${new Date().toLocaleString()}`,
+      PW/2, 279, {align:'center'}
+    );
+  }
+
+  return doc;
+}
+
+function hexToRgb(hex){
+  hex=hex.replace('#','');
+  const n=parseInt(hex,16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+
+// ── Entry points ──────────────────────────────────────────────────────────
+
+// Called from Finalize & Save (no email)
+async function finalizeInsp(){
+  const insp=S.curInsp; if(!insp) return;
+  const sig=document.getElementById('comp-sig').value.trim();
+  if(!sig){ alert('Please enter your name to finalize.'); return; }
+  insp.status='completed';
+  insp.completedDate=new Date().toISOString();
+  insp.signature=sig;
+  insp.completionNotes=document.getElementById('comp-notes').value;
+  fbSaveInsp(insp);
+  _saveViolations(insp);
+  // Generate and store PDF silently
+  _generateAndStorePDF(insp);
+  closeMo('mo-complete');
+  S.curInsp=null; S.curBiz=null;
+  document.getElementById('insp-ph').classList.remove('hidden');
+  document.getElementById('insp-body').classList.add('hidden');
+  showSaveToast();
+  showScreen('dashboard');
+}
+
+// Called from Finalize + Email button
+async function finalizeAndEmail(){
+  const insp=S.curInsp; if(!insp) return;
+  const sig=document.getElementById('comp-sig').value.trim();
+  if(!sig){ alert('Please enter your name to finalize.'); return; }
+  insp.status='completed';
+  insp.completedDate=new Date().toISOString();
+  insp.signature=sig;
+  insp.completionNotes=document.getElementById('comp-notes').value;
+  fbSaveInsp(insp);
+  _saveViolations(insp);
+  closeMo('mo-complete');
+  // Generate PDF, download it, open email
+  await _generateDownloadAndEmail(insp);
+  S.curInsp=null; S.curBiz=null;
+  document.getElementById('insp-ph').classList.remove('hidden');
+  document.getElementById('insp-body').classList.add('hidden');
+  showScreen('dashboard');
+}
+
+function _saveViolations(insp){
+  const viols=collectViolations(insp);
+  viols.forEach(v=>{
+    const exists=S.violations.find(x=>x.itemId===v.id&&x.bizId===insp.bizId&&x.status==='open');
+    if(!exists){
+      const newV={
+        id:'viol_'+Date.now()+'_'+Math.random().toString(36).slice(2),
+        bizId:insp.bizId, bizName:insp.bizName, bizAddress:insp.bizAddress,
+        itemId:v.id, label:v.label, code:v.code, critical:v.critical,
+        note:v.note, sectionTitle:v.sectionTitle,
+        inspectionId:insp.id, date:insp.completedDate, status:'open'
+      };
+      fbSaveViol(newV);
+    }
+  });
+}
+
+async function _generateAndStorePDF(insp){
+  try {
+    const biz=S.businesses.find(b=>b.id===insp.bizId)||S.archivedBusinesses.find(b=>b.id===insp.bizId);
+    const doc = await generateInspectionPDF(insp, biz);
+    if(!doc) return;
+    const b64 = doc.output('datauristring');
+    await fbSaveReport(insp.id, b64);
+  } catch(e){ console.error('PDF store error',e); }
+}
+
+async function _generateDownloadAndEmail(insp){
+  try {
+    const biz=S.businesses.find(b=>b.id===insp.bizId)||S.archivedBusinesses.find(b=>b.id===insp.bizId);
+    const doc = await generateInspectionPDF(insp, biz);
+    if(!doc){ alert('PDF generation failed.'); return; }
+    const filename=`YorktownFI_${(insp.bizName||'report').replace(/[^a-z0-9]/gi,'_')}_${new Date(insp.completedDate||insp.date).toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+    const b64 = doc.output('datauristring');
+    await fbSaveReport(insp.id, b64);
+    // Open email after short delay (let download start)
+    const s=S.settings;
+    const dt=new Date(insp.completedDate||insp.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    const viols=collectViolations(insp);
+    const to=[biz&&biz.contactEmail,s.inspectorEmail,s.deptEmail].filter(Boolean).join(',');
+    const subj=`Fire Inspection Report – ${insp.bizName||''} – ${dt}`;
+    const body=`Please find attached the fire inspection report for ${insp.bizName||''} conducted on ${dt}.\n\n`+
+      `Inspector: ${insp.signature||s.inspectorName||''}\n`+
+      (insp.contactPerson?`Contact On-Site: ${insp.contactPerson}\n`:'')+
+      `Violations Found: ${viols.length}${viols.filter(v=>v.critical).length>0?' ('+viols.filter(v=>v.critical).length+' CRITICAL)':''}\n\n`+
+      `The PDF report has been downloaded to your device. Please attach it to this email before sending.\n\n`+
+      `Town of Yorktown Bureau of Fire Prevention`;
+    setTimeout(()=>{ window.location.href=`mailto:${to}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`; }, 800);
+  } catch(e){ alert('PDF generation error: '+e.message); console.error(e); }
+}
+
+// View a saved report (from history popup or past inspection view)
+async function viewOrDownloadReport(inspId){
+  const insp=S.inspections.find(i=>i.id===inspId);
+  if(!insp){ alert('Inspection not found.'); return; }
+  const biz=S.businesses.find(b=>b.id===insp.bizId)||S.archivedBusinesses.find(b=>b.id===insp.bizId);
+
+  // Check if stored report exists
+  const snap = await fbGetReport(inspId).catch(()=>null);
+  if(snap&&snap.exists()&&snap.val().base64pdf){
+    // Use stored PDF
+    _showPDFActions(snap.val().base64pdf, insp);
+  } else {
+    // Regenerate on the fly
+    document.getElementById('pdf-report-preview').textContent='Generating PDF…';
+    openMo('mo-pdf-report');
+    try {
+      const doc = await generateInspectionPDF(insp, biz);
+      if(!doc){ closeMo('mo-pdf-report'); alert('PDF generation failed.'); return; }
+      const b64 = doc.output('datauristring');
+      await fbSaveReport(inspId, b64);
+      _showPDFActions(b64, insp);
+    } catch(e){ closeMo('mo-pdf-report'); alert('Error: '+e.message); }
+  }
+}
+
+function _showPDFActions(b64, insp){
+  const filename=`YorktownFI_${(insp.bizName||'report').replace(/[^a-z0-9]/gi,'_')}_${new Date(insp.completedDate||insp.date).toISOString().slice(0,10)}.pdf`;
+  const dt=new Date(insp.completedDate||insp.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('pdf-report-preview').innerHTML=`
+    <div style="text-align:center;padding:20px">
+      <div style="font-size:48px;margin-bottom:8px">📄</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">${insp.bizName||'Inspection Report'}</div>
+      <div style="color:#666;font-size:12px">${dt}</div>
+    </div>`;
+  document.getElementById('pdf-report-actions').innerHTML=`
+    <a class="btn btn-red flex-1" href="${b64}" download="${filename}" style="text-decoration:none">⬇️ Download PDF</a>
+    <button class="btn btn-blue flex-1" onclick="_emailExistingReport('${insp.id}')">📧 Email</button>
+    <button class="btn btn-orange flex-1" onclick="_regenerateReport('${insp.id}')">🔄 Regenerate</button>`;
+  openMo('mo-pdf-report');
+}
+
+async function _emailExistingReport(inspId){
+  const insp=S.inspections.find(i=>i.id===inspId); if(!insp) return;
+  const biz=S.businesses.find(b=>b.id===insp.bizId)||S.archivedBusinesses.find(b=>b.id===insp.bizId);
+  const s=S.settings;
+  const dt=new Date(insp.completedDate||insp.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const viols=collectViolations(insp);
+  const to=[biz&&biz.contactEmail,s.inspectorEmail,s.deptEmail].filter(Boolean).join(',');
+  const subj=`Fire Inspection Report – ${insp.bizName||''} – ${dt}`;
+  const body=`Please find attached the fire inspection report for ${insp.bizName||''} conducted on ${dt}.\n\n`+
+    `Inspector: ${insp.signature||s.inspectorName||''}\n`+
+    `Violations: ${viols.length}${viols.filter(v=>v.critical).length>0?' ('+viols.filter(v=>v.critical).length+' CRITICAL)':''}\n\n`+
+    `Download the PDF from the app and attach it to this email before sending.\n\n`+
+    `Town of Yorktown Bureau of Fire Prevention`;
+  window.location.href=`mailto:${to}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+}
+
+async function _regenerateReport(inspId){
+  const insp=S.inspections.find(i=>i.id===inspId); if(!insp) return;
+  const biz=S.businesses.find(b=>b.id===insp.bizId)||S.archivedBusinesses.find(b=>b.id===insp.bizId);
+  document.getElementById('pdf-report-preview').textContent='Regenerating…';
+  document.getElementById('pdf-report-actions').innerHTML='';
+  try {
+    const doc = await generateInspectionPDF(insp, biz);
+    if(!doc){ alert('Failed.'); return; }
+    const b64 = doc.output('datauristring');
+    await fbSaveReport(inspId, b64);
+    _showPDFActions(b64, insp);
+  } catch(e){ alert('Error: '+e.message); }
 }
 
 // ── Draft helpers ───────────────────────────────────────────────
