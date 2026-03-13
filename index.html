@@ -7,6 +7,7 @@
 <!-- Firebase SDK (compat v9 – works as global firebase.*) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <!-- SheetJS for Excel export/import -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- jsPDF + autotable for PDF reports -->
@@ -1107,6 +1108,8 @@ function checkPin(){
 function loginAs(user){
   _currentUser=user;
   try{sessionStorage.setItem('yfi_session',JSON.stringify({id:user.id}));}catch(e){}
+  // Establish Firebase Auth session so security rules can verify the user is authenticated
+  firebase.auth().signInAnonymously().catch(e=>console.warn('Auth sign-in failed:',e));
   // Reset state
   S.businesses=[];S.inspections=[];S.violations=[];S.certifications=[];
   S.curBiz=null;S.curInsp=null;S.editBizId=null;
@@ -1192,6 +1195,7 @@ function detachRtdbListeners(){
 function logout(){
   if(!confirm('Log out of your session?')) return;
   detachRtdbListeners();
+  firebase.auth().signOut().catch(()=>{});
   _currentUser=null;
   try{sessionStorage.removeItem('yfi_session');}catch(e){}
   S={businesses:[],inspections:[],violations:[],certifications:[],
