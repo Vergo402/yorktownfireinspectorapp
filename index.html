@@ -1108,25 +1108,34 @@ function checkPin(){
 function loginAs(user){
   _currentUser=user;
   try{sessionStorage.setItem('yfi_session',JSON.stringify({id:user.id}));}catch(e){}
-  // Establish Firebase Auth session so security rules can verify the user is authenticated
-  firebase.auth().signInAnonymously().catch(e=>console.warn('Auth sign-in failed:',e));
   // Reset state
   S.businesses=[];S.inspections=[];S.violations=[];S.certifications=[];
   S.curBiz=null;S.curInsp=null;S.editBizId=null;
-  // Load per-user settings from Firebase, then attach shared listeners
-  dbGet('settings/'+user.id).then(snap=>{
-    if(snap.exists()){
-      S.settings={...S.settings,...snap.val()};
-    } else {
-      S.settings={
-        inspectorName:user.name, inspectorEmail:user.email||'',
-        inspectorPhone:user.phone||'', inspectorBadge:user.badge||'',
-        deptEmail:'building@yorktownny.gov',
-        deptName:'Town of Yorktown Building Department'
-      };
+  // Wait for Firebase Auth token before touching protected paths
+  const unsubscribe = firebase.auth().onAuthStateChanged(authUser=>{
+    if(authUser){
+      unsubscribe(); // only need to fire once
+      dbGet('settings/'+user.id).then(snap=>{
+        if(snap.exists()){
+          S.settings={...S.settings,...snap.val()};
+        } else {
+          S.settings={
+            inspectorName:user.name, inspectorEmail:user.email||'',
+            inspectorPhone:user.phone||'', inspectorBadge:user.badge||'',
+            deptEmail:'building@yorktownny.gov',
+            deptName:'Town of Yorktown Building Department'
+          };
+        }
+        attachRtdbListeners(user);
+      }).catch(()=>{ attachRtdbListeners(user); });
     }
+  });
+  // Sign in anonymously — onAuthStateChanged above will fire once token is ready
+  firebase.auth().signInAnonymously().catch(e=>{
+    console.warn('Auth sign-in failed:',e);
+    // Fallback: try to attach listeners anyway (will fail if rules are strict)
     attachRtdbListeners(user);
-  }).catch(()=>{ attachRtdbListeners(user); });
+  });
   document.getElementById('hdr-user-av').textContent=user.name.charAt(0).toUpperCase();
   document.getElementById('hdr-user-name').textContent=user.name.split(' ')[0];
   const adminBadge=document.getElementById('hdr-admin-badge');
