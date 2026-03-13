@@ -245,6 +245,29 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
 .photo-thumb{position:relative;width:64px;height:64px;border-radius:7px;overflow:hidden;flex-shrink:0;border:2px solid var(--border)}
 .photo-thumb img{width:100%;height:100%;object-fit:cover}
 .photo-del{position:absolute;top:1px;right:1px;background:rgba(0,0,0,.55);border:none;color:#fff;font-size:11px;width:18px;height:18px;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+/* Auto-save toast */
+#save-toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(20px);background:#2ecc71;color:#fff;padding:7px 18px;border-radius:20px;font-size:13px;font-weight:700;opacity:0;transition:opacity .25s,transform .25s;z-index:9999;pointer-events:none;white-space:nowrap}
+#save-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* Section status dot */
+.sec-status{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-right:4px;background:#ddd}
+.sec-status.done{background:#2ecc71}
+.sec-status.has-fail{background:var(--red)}
+.sec-status.partial{background:#f39c12}
+/* Expand toggle switch */
+.exp-toggle-wrap{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--gray);font-weight:600}
+.exp-toggle{position:relative;width:36px;height:20px;flex-shrink:0}
+.exp-toggle input{opacity:0;width:0;height:0}
+.exp-slider{position:absolute;inset:0;background:#ccc;border-radius:20px;cursor:pointer;transition:.25s}
+.exp-slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s}
+.exp-toggle input:checked+.exp-slider{background:var(--red)}
+.exp-toggle input:checked+.exp-slider:before{transform:translateX(16px)}
+/* Fail photo prompt */
+.fail-photo-prompt{display:none;margin-top:6px;padding:6px 10px;background:#fff3f3;border:1px dashed var(--red);border-radius:6px;font-size:11px;color:var(--red);font-weight:700;align-items:center;gap:6px;cursor:pointer}
+.fail-photo-prompt.show{display:flex}
+/* Time/contact fields */
+.insp-meta-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.insp-meta-fields input{padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font);width:100%;box-sizing:border-box}
+.insp-meta-fields label{font-size:10px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;display:block}
 .photo-add{width:64px;height:64px;border-radius:7px;border:2px dashed var(--border);background:#f8f9fa;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:var(--gray);flex-shrink:0;transition:all .15s}
 .photo-add:hover{border-color:var(--red);background:#fef9f9;color:var(--red)}
 
@@ -351,6 +374,7 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
 <div id="screen-inspection" class="screen">
   <div id="insp-ph" class="es"><div class="ei">🏢</div><p>Select a property to begin an inspection</p><button class="btn btn-red mt12" onclick="showScreen('businesses')">Select Property</button></div>
   <div id="insp-body" class="hidden">
+    <div id="save-toast">✓ Saved</div>
     <div class="card" style="margin-bottom:11px">
       <div class="cb" style="padding:11px 13px">
         <div class="flex jb ac">
@@ -365,6 +389,21 @@ body{font-family:var(--font);background:#f0f2f5;color:#2c3e50;min-height:100vh;f
           </div>
         </div>
         <div class="pw mt8"><div class="pb" id="ib-prog" style="width:0%"></div></div>
+        <div class="insp-meta-fields" id="ib-meta-fields">
+          <div><label>Time In</label><input type="time" id="ib-time-in" onchange="saveInspMeta()"></div>
+          <div><label>Time Out</label><input type="time" id="ib-time-out" onchange="saveInspMeta()"></div>
+          <div style="grid-column:1/-1"><label>Contact Person On-Site</label><input type="text" id="ib-contact" placeholder="Name / title…" onchange="saveInspMeta()"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+          <label class="exp-toggle-wrap">
+            <span>Expand Sections</span>
+            <label class="exp-toggle">
+              <input type="checkbox" id="expand-toggle" onchange="toggleExpandAll(this.checked)">
+              <span class="exp-slider"></span>
+            </label>
+          </label>
+          <span id="ib-fail-count" style="font-size:11px;font-weight:700;color:var(--red)"></span>
+        </div>
       </div>
     </div>
     <div id="ib-alerts"></div>
@@ -1332,13 +1371,21 @@ let _bulkPreviewData = [];
 // ─── Firebase write helpers ─────────────────────────────
 // save() is called throughout the app for in-progress inspection draft
 // Shared records are written individually; no bulk state dump needed
+let _saveToastTimer=null;
+function showSaveToast(){
+  const t=document.getElementById('save-toast');
+  if(!t) return;
+  t.classList.add('show');
+  if(_saveToastTimer) clearTimeout(_saveToastTimer);
+  _saveToastTimer=setTimeout(()=>t.classList.remove('show'),1400);
+}
 function save(){
   // Only needs to persist the in-progress inspection draft (curInsp)
   if(!_currentUser||!S.curInsp) return;
   // Strip sections before saving — it is derived data rebuilt from sectionsForOcc()
-  // Storing it causes Firebase to convert arrays to objects, breaking forEach on load
   const {sections, ...inspToSave} = S.curInsp;
   dbSet('inspections/'+S.curInsp.id, inspToSave);
+  showSaveToast();
 }
 
 // Write a single business
@@ -1925,12 +1972,16 @@ function startInsp(bizId) {
     if(!S.curInsp.itemAnswers) S.curInsp.itemAnswers = {};
     if(!S.curInsp.itemNotes) S.curInsp.itemNotes = {};
   } else {
+    const _now=new Date();
+    const _hh=String(_now.getHours()).padStart(2,'0');
+    const _mm=String(_now.getMinutes()).padStart(2,'0');
     S.curInsp = {
       id:'insp_'+Date.now(),
       bizId:biz.id, bizName:biz.name,
       bizAddress:biz.address+', '+biz.city+', NY '+biz.zip,
       occupancy:biz.occupancy, date:new Date().toISOString(),
       status:'draft',
+      timeIn:_hh+':'+_mm, timeOut:'', contactPerson:'',
       secAnswers:{}, itemAnswers:{}, itemNotes:{}, itemPhotos:{},
       sections: sectionsForOcc(biz.occupancy, biz.standpipe)
     };
@@ -1964,6 +2015,16 @@ function renderInsp() {
   if (biz.liion && biz.liion !== 'none')
     alertDiv.innerHTML += `<div class="al al-purple">🔋 <div><strong>Li-Ion / ESS Present:</strong> Complete the Lithium-Ion Battery section fully. Thermal runaway is a serious fire risk.</div></div>`;
 
+  // Populate time/contact fields
+  const ti=document.getElementById('ib-time-in');
+  const to=document.getElementById('ib-time-out');
+  const cp=document.getElementById('ib-contact');
+  if(ti) ti.value=S.curInsp.timeIn||'';
+  if(to) to.value=S.curInsp.timeOut||'';
+  if(cp) cp.value=S.curInsp.contactPerson||'';
+  // Restore expand toggle state (default off)
+  const tog=document.getElementById('expand-toggle');
+  if(tog) tog.checked=S.curInsp._expandSections||false;
   updateProgress();
   buildChecklistUI();
 }
@@ -1972,29 +2033,30 @@ function buildChecklistUI() {
   const insp = S.curInsp;
   const cl = document.getElementById('ib-checklist');
   cl.innerHTML = '';
+  const expandAll = document.getElementById('expand-toggle')&&document.getElementById('expand-toggle').checked;
   insp.sections.forEach(sec => {
     const secAns = insp.secAnswers[sec.id] || '';
     const isNA = secAns === 'na';
+    // Section status
+    const answeredItems = sec.items.filter(it=>insp.itemAnswers[it.id]);
+    const failItems = sec.items.filter(it=>insp.itemAnswers[it.id]==='fail');
+    const allAnswered = answeredItems.length === sec.items.length;
+    const secStatusClass = failItems.length>0 ? 'has-fail' : allAnswered ? 'done' : answeredItems.length>0 ? 'partial' : '';
     const el = document.createElement('div');
     el.className = 'card sec-wrap';
-    // Count item pass/fail
-    let p=0,f=0;
-    sec.items.forEach(it=>{
-      const a=insp.itemAnswers[it.id];
-      if(a==='pass')p++;
-      if(a==='fail')f++;
-    });
+    const isOpen = expandAll;
     el.innerHTML = `
       <div class="sec-hdr${isNA?' sec-na':''}" id="shdr-${sec.id}">
+        <span class="sec-status ${secStatusClass}" id="sstat-${sec.id}"></span>
         <span style="flex:1;text-align:left">${sec.title}</span>
         <div class="sec-pfa" onclick="event.stopPropagation()">
           <button class="spf-btn sp-pass${secAns==='pass'?' sel':''}" onclick="setSec('${sec.id}','pass')">✓ PASS</button>
           <button class="spf-btn sp-fail${secAns==='fail'?' sel':''}" onclick="setSec('${sec.id}','fail')">✗ FAIL</button>
           <button class="spf-btn sp-na${secAns==='na'?' sel':''}" onclick="setSec('${sec.id}','na')">— N/A</button>
         </div>
-        <button style="background:none;border:none;cursor:pointer;font-size:16px;padding:0 4px" onclick="toggleSec('${sec.id}')" id="stog-${sec.id}">▶</button>
+        <button style="background:none;border:none;cursor:pointer;font-size:16px;padding:0 4px" onclick="toggleSec('${sec.id}')" id="stog-${sec.id}">${isOpen?'▼':'▶'}</button>
       </div>
-      <div class="sec-items" id="sitems-${sec.id}">
+      <div class="sec-items${isOpen?' open':''}" id="sitems-${sec.id}">
         ${sec.items.map(it=>itemHTML(it,insp,isNA)).join('')}
         ${secAns==='fail'?`<div style="padding:10px 13px;background:#fef9f9">
           <textarea class="fg" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:var(--font);resize:vertical" placeholder="Section-level violation notes…" id="secnote-${sec.id}" onchange="saveSecNote('${sec.id}',this.value)">${insp.secNotes&&insp.secNotes[sec.id]||''}</textarea>
@@ -2036,6 +2098,9 @@ function itemHTML(item, insp, sectionIsNA) {
         <div class="ci-code">📜 ${item.code}</div>
         <textarea class="ci-note${note?' show':''}" id="note-${item.id}" placeholder="Violation detail / notes…" onchange="saveItemNote('${item.id}',this.value)">${note}</textarea>
         <button class="note-toggle" onclick="toggleNote('${item.id}')">✏️ ${note?'Edit':'Add'} note</button>
+        <div class="fail-photo-prompt${ans==='fail'?' show':''}" id="fail-prompt-${item.id}" onclick="addPhoto('${item.id}')">
+          📷 Tap to add photo of violation
+        </div>
         <div class="photo-row" id="photos-${item.id}">
           ${thumbsHTML}
           <div class="photo-add" onclick="addPhoto('${item.id}')"><span>📷</span><span style="font-size:9px;margin-top:2px">Add</span></div>
@@ -2072,6 +2137,17 @@ function saveSecNote(secId, val) {
   save();
 }
 
+function saveInspMeta(){
+  if(!S.curInsp) return;
+  const ti=document.getElementById('ib-time-in');
+  const to=document.getElementById('ib-time-out');
+  const cp=document.getElementById('ib-contact');
+  if(ti) S.curInsp.timeIn=ti.value;
+  if(to) S.curInsp.timeOut=to.value;
+  if(cp) S.curInsp.contactPerson=cp.value;
+  save();
+}
+
 function setItem(itemId, val) {
   const insp = S.curInsp; if(!insp) return;
   insp.itemAnswers[itemId] = val;
@@ -2084,6 +2160,11 @@ function setItem(itemId, val) {
     if(val==='fail'){
       const n=document.getElementById('note-'+itemId);
       if(n) n.classList.add('show');
+      const fp=document.getElementById('fail-prompt-'+itemId);
+      if(fp) fp.classList.add('show');
+    } else {
+      const fp=document.getElementById('fail-prompt-'+itemId);
+      if(fp) fp.classList.remove('show');
     }
   }
   // Check if all items in section have been answered → auto-update section status
@@ -2200,21 +2281,54 @@ function toggleSec(secId){
   if(tog) tog.textContent = el.classList.contains('open')?'▼':'▶';
 }
 
+function toggleExpandAll(expand){
+  const insp=S.curInsp; if(!insp) return;
+  insp._expandSections=expand;
+  insp.sections.forEach(sec=>{
+    const el=document.getElementById('sitems-'+sec.id);
+    const tog=document.getElementById('stog-'+sec.id);
+    if(!el) return;
+    if(expand){ el.classList.add('open'); if(tog) tog.textContent='▼'; }
+    else { el.classList.remove('open'); if(tog) tog.textContent='▶'; }
+  });
+}
+
 function updateProgress(){
   const insp=S.curInsp; if(!insp) return;
-  let total=0,done=0;
-  insp.sections.forEach(s=>s.items.forEach(i=>{total++;if(insp.itemAnswers[i.id])done++;}));
+  let total=0,done=0,fails=0;
+  insp.sections.forEach(s=>{
+    // Exclude sections where every answered item is NA (or section marked NA)
+    const secAns=insp.secAnswers[s.id]||'';
+    if(secAns==='na') return; // skip whole section
+    s.items.forEach(i=>{
+      const a=insp.itemAnswers[i.id];
+      if(a!=='na'){ total++; if(a) done++; } // na items don't count toward total
+      if(a==='fail') fails++;
+    });
+    // Update status dot
+    const answered=s.items.filter(i=>insp.itemAnswers[i.id]);
+    const failItems=s.items.filter(i=>insp.itemAnswers[i.id]==='fail');
+    const allAns=answered.length===s.items.length||(secAns&&secAns!=='');
+    const dot=document.getElementById('sstat-'+s.id);
+    if(dot){
+      dot.className='sec-status';
+      if(failItems.length>0) dot.classList.add('has-fail');
+      else if(allAns&&answered.length>0) dot.classList.add('done');
+      else if(answered.length>0) dot.classList.add('partial');
+    }
+  });
   const pct=total>0?Math.round(done/total*100):0;
   const bar=document.getElementById('ib-prog');
   const pctEl=document.getElementById('ib-pct');
+  const failBadge=document.getElementById('ib-fail-count');
   if(bar) bar.style.width=pct+'%';
   if(pctEl) pctEl.textContent=pct+'%';
-}
+  if(failBadge) failBadge.textContent=fails>0?`⚠️ ${fails} fail${fails>1?'s':''}`:'';}
 
 function saveDraft(){
   if(!S.curInsp) return;
   S.curInsp.status='draft'; save();
-  alert('✅ Draft saved!');
+  // toast shown by save()
 }
 
 function completeInsp(){
@@ -2243,6 +2357,16 @@ function completeInsp(){
          ${viols.length>6?`<div style="padding:8px 13px;font-size:12px;color:var(--gray)">+ ${viols.length-6} more violation(s) in email report…</div>`:''}`
       :`<div class="al al-green">✅ <div>No violations detected. Excellent compliance!</div></div>`}
   `;
+  // Pre-populate time out if not set
+  if(S.curInsp && !S.curInsp.timeOut){
+    const _n=new Date();
+    const _h=String(_n.getHours()).padStart(2,'0');
+    const _m=String(_n.getMinutes()).padStart(2,'0');
+    S.curInsp.timeOut=_h+':'+_m;
+    const toEl=document.getElementById('ib-time-out');
+    if(toEl) toEl.value=S.curInsp.timeOut;
+    save();
+  }
   document.getElementById('comp-sig').value=S.settings.inspectorName||'';
   openMo('mo-complete');
 }
@@ -3273,6 +3397,8 @@ function viewPastInsp(inspId){
       <div style="font-weight:800;font-size:15px">${insp.bizName||'Unknown Property'}</div>
       <div style="font-size:12px;color:#666;margin-top:2px">${insp.bizAddress||''}</div>
       <div style="font-size:12px;color:#666">📅 ${dt} &nbsp;·&nbsp; 👤 ${insp.signature||'Unknown'}</div>
+      ${(insp.timeIn||insp.timeOut)?'<div style="font-size:12px;color:#666">🕐 '+[insp.timeIn?'In: '+insp.timeIn:'',insp.timeOut?'Out: '+insp.timeOut:''].filter(Boolean).join(' &nbsp;·&nbsp; ')+'</div>':''}
+      ${insp.contactPerson?'<div style="font-size:12px;color:#666">📞 Contact: '+insp.contactPerson+'</div>':''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <span style="background:#d5f5e3;color:#1e8449;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">✓ ${passed} Pass</span>
         <span style="background:#fadbd8;color:#922b21;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">✗ ${failed} Fail</span>
